@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Zap, Mail, Lock, User, ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 
 const emailSchema = z.string().trim().email("Please enter a valid email address").max(255);
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters").max(72);
 const nameSchema = z.string().trim().min(2, "Name must be at least 2 characters").max(100);
 
-type AuthMode = "login" | "signup";
+type AuthMode = "login" | "signup" | "forgot";
 
 const Auth = () => {
   const [mode, setMode] = useState<AuthMode>("login");
@@ -121,6 +122,39 @@ const Auth = () => {
     setErrors({});
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const emailResult = emailSchema.safeParse(email);
+    if (!emailResult.success) {
+      setErrors({ email: emailResult.error.errors[0].message });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Check your email",
+          description: "We've sent you a password reset link.",
+        });
+        setMode("login");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -149,16 +183,18 @@ const Auth = () => {
             <Card className="border-border/50">
               <CardHeader className="space-y-1">
                 <CardTitle className="text-2xl">
-                  {mode === "login" ? "Welcome back" : "Create account"}
+                  {mode === "login" ? "Welcome back" : mode === "signup" ? "Create account" : "Reset password"}
                 </CardTitle>
                 <CardDescription>
                   {mode === "login"
                     ? "Enter your credentials to access your account"
-                    : "Start your journey to seamless mobile top-ups"}
+                    : mode === "signup"
+                    ? "Start your journey to seamless mobile top-ups"
+                    : "Enter your email to receive a reset link"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={mode === "forgot" ? handleForgotPassword : handleSubmit} className="space-y-4">
                   {mode === "signup" && (
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">Full Name</label>
@@ -197,30 +233,43 @@ const Auth = () => {
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Password</label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-11 pr-11"
-                        disabled={isLoading}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
+                  {mode !== "forgot" && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium text-foreground">Password</label>
+                        {mode === "login" && (
+                          <button
+                            type="button"
+                            onClick={() => { setMode("forgot"); setErrors({}); }}
+                            className="text-sm text-primary hover:underline"
+                          >
+                            Forgot password?
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter your password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pl-11 pr-11"
+                          disabled={isLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
+                      {errors.password && (
+                        <p className="text-sm text-destructive">{errors.password}</p>
+                      )}
                     </div>
-                    {errors.password && (
-                      <p className="text-sm text-destructive">{errors.password}</p>
-                    )}
-                  </div>
+                  )}
 
                   <Button
                     type="submit"
@@ -230,27 +279,40 @@ const Auth = () => {
                     {isLoading ? (
                       <>
                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        {mode === "login" ? "Signing in..." : "Creating account..."}
+                        {mode === "login" ? "Signing in..." : mode === "signup" ? "Creating account..." : "Sending..."}
                       </>
                     ) : mode === "login" ? (
                       "Sign In"
-                    ) : (
+                    ) : mode === "signup" ? (
                       "Create Account"
+                    ) : (
+                      "Send Reset Link"
                     )}
                   </Button>
                 </form>
 
                 <div className="mt-6 text-center">
-                  <p className="text-muted-foreground">
-                    {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
+                  {mode === "forgot" ? (
                     <button
-                      onClick={switchMode}
-                      className="text-primary font-semibold hover:underline"
+                      onClick={() => { setMode("login"); setErrors({}); }}
+                      className="text-primary font-semibold hover:underline flex items-center justify-center gap-2 mx-auto"
                       disabled={isLoading}
                     >
-                      {mode === "login" ? "Sign up" : "Sign in"}
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to login
                     </button>
-                  </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
+                      <button
+                        onClick={switchMode}
+                        className="text-primary font-semibold hover:underline"
+                        disabled={isLoading}
+                      >
+                        {mode === "login" ? "Sign up" : "Sign in"}
+                      </button>
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
