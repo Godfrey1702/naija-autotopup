@@ -1,57 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { WelcomeScreen } from "@/components/onboarding/WelcomeScreen";
-import { PhoneSetup } from "@/components/onboarding/PhoneSetup";
+import { useAuth } from "@/contexts/AuthContext";
+import { PhoneVerification } from "@/components/onboarding/PhoneVerification";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { HomeView } from "@/components/views/HomeView";
 import { TopUpView } from "@/components/views/TopUpView";
 import { WalletView } from "@/components/views/WalletView";
 import { AnalyticsView } from "@/components/views/AnalyticsView";
 import { SettingsView } from "@/components/views/SettingsView";
-
-type OnboardingStep = "welcome" | "phone" | "complete";
+import { Loader2 } from "lucide-react";
 
 const Index = () => {
-  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>("welcome");
   const [activeTab, setActiveTab] = useState("home");
+  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  
+  const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
 
-  // For demo purposes, skip onboarding with this state
-  const [isOnboarded, setIsOnboarded] = useState(false);
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
 
-  const handlePhoneComplete = (phone: string, network: string) => {
-    console.log("Phone setup complete:", { phone, network });
-    setOnboardingStep("complete");
-    setIsOnboarded(true);
-  };
+  useEffect(() => {
+    // Show phone verification if user is logged in but phone not verified
+    if (user && profile && !profile.phone_verified) {
+      setShowPhoneVerification(true);
+    }
+  }, [user, profile]);
 
-  // Onboarding flow
-  if (!isOnboarded) {
+  if (loading) {
     return (
-      <AnimatePresence mode="wait">
-        {onboardingStep === "welcome" && (
-          <motion.div
-            key="welcome"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <WelcomeScreen onGetStarted={() => setOnboardingStep("phone")} />
-          </motion.div>
-        )}
-        {onboardingStep === "phone" && (
-          <motion.div
-            key="phone"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <PhoneSetup
-              onBack={() => setOnboardingStep("welcome")}
-              onComplete={handlePhoneComplete}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  // Phone verification flow
+  if (showPhoneVerification) {
+    return (
+      <PhoneVerification
+        onComplete={() => setShowPhoneVerification(false)}
+        onSkip={() => setShowPhoneVerification(false)}
+      />
     );
   }
 
