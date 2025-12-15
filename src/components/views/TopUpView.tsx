@@ -12,54 +12,43 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useWallet } from "@/contexts/WalletContext";
 
 interface TopUpViewProps {
   onBack: () => void;
 }
 
-interface Rule {
-  id: string;
-  type: "airtime" | "data";
-  threshold: number;
-  thresholdUnit: string;
-  amount: number;
-  enabled: boolean;
-}
-
 export function TopUpView({ onBack }: TopUpViewProps) {
-  const [rules, setRules] = useState<Rule[]>([
-    { id: "1", type: "data", threshold: 50, thresholdUnit: "MB", amount: 500, enabled: true },
-    { id: "2", type: "airtime", threshold: 100, thresholdUnit: "₦", amount: 200, enabled: true },
-  ]);
+  const { autoTopUpRules, createAutoTopUpRule, deleteAutoTopUpRule, toggleAutoTopUpRule } = useWallet();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newRule, setNewRule] = useState<Partial<Rule>>({
+  const [isLoading, setIsLoading] = useState(false);
+  const [newRule, setNewRule] = useState<{
+    type: "data" | "airtime";
+    threshold: number;
+    amount: number;
+  }>({
     type: "data",
-    threshold: 100,
+    threshold: 20,
     amount: 500,
   });
 
   const toggleRule = (id: string) => {
-    setRules(rules.map(rule =>
-      rule.id === id ? { ...rule, enabled: !rule.enabled } : rule
-    ));
+    toggleAutoTopUpRule(id);
   };
 
-  const deleteRule = (id: string) => {
-    setRules(rules.filter(rule => rule.id !== id));
+  const handleDeleteRule = (id: string) => {
+    deleteAutoTopUpRule(id);
   };
 
-  const addRule = () => {
-    const rule: Rule = {
-      id: Date.now().toString(),
-      type: newRule.type || "data",
-      threshold: newRule.threshold || 100,
-      thresholdUnit: newRule.type === "data" ? "MB" : "₦",
-      amount: newRule.amount || 500,
-      enabled: true,
-    };
-    setRules([...rules, rule]);
-    setIsDialogOpen(false);
-    setNewRule({ type: "data", threshold: 100, amount: 500 });
+  const addRule = async () => {
+    setIsLoading(true);
+    const { error } = await createAutoTopUpRule(newRule.type, newRule.threshold, newRule.amount);
+    setIsLoading(false);
+    
+    if (!error) {
+      setIsDialogOpen(false);
+      setNewRule({ type: "data", threshold: 20, amount: 500 });
+    }
   };
 
   return (
@@ -152,13 +141,18 @@ export function TopUpView({ onBack }: TopUpViewProps) {
 
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      When balance is below ({newRule.type === "data" ? "MB" : "₦"})
+                      When balance drops below (%)
                     </label>
                     <Input
                       type="number"
+                      min={1}
+                      max={100}
                       value={newRule.threshold}
                       onChange={(e) => setNewRule({ ...newRule, threshold: Number(e.target.value) })}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Percentage threshold to trigger auto top-up
+                    </p>
                   </div>
 
                   <div>
@@ -172,15 +166,15 @@ export function TopUpView({ onBack }: TopUpViewProps) {
                     />
                   </div>
 
-                  <Button onClick={addRule} className="w-full">
-                    Create Rule
+                  <Button onClick={addRule} className="w-full" disabled={isLoading}>
+                    {isLoading ? "Creating..." : "Create Rule"}
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
 
-          {rules.map((rule, index) => (
+          {autoTopUpRules.map((rule, index) => (
             <motion.div
               key={rule.id}
               initial={{ opacity: 0, x: -20 }}
@@ -202,17 +196,17 @@ export function TopUpView({ onBack }: TopUpViewProps) {
                     <div>
                       <p className="font-medium text-foreground capitalize">{rule.type}</p>
                       <p className="text-sm text-muted-foreground">
-                        Top up ₦{rule.amount.toLocaleString()} when below {rule.threshold}{rule.thresholdUnit}
+                        Top up ₦{rule.topup_amount.toLocaleString()} when below {rule.threshold_percentage}%
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <Switch
-                      checked={rule.enabled}
+                      checked={rule.is_enabled}
                       onCheckedChange={() => toggleRule(rule.id)}
                     />
                     <button
-                      onClick={() => deleteRule(rule.id)}
+                      onClick={() => handleDeleteRule(rule.id)}
                       className="text-muted-foreground hover:text-destructive transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -223,7 +217,7 @@ export function TopUpView({ onBack }: TopUpViewProps) {
             </motion.div>
           ))}
 
-          {rules.length === 0 && (
+          {autoTopUpRules.length === 0 && (
             <Card variant="gradient" className="p-8 text-center">
               <Zap className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground mb-2">No rules yet</p>
