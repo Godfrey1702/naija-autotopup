@@ -5,28 +5,54 @@ import { QuickActions } from "@/components/dashboard/QuickActions";
 import { AutoTopUpStatus } from "@/components/dashboard/AutoTopUpStatus";
 import { UsageOverview } from "@/components/dashboard/UsageOverview";
 import { BudgetCard } from "@/components/dashboard/BudgetCard";
+import { useWallet } from "@/contexts/WalletContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface HomeViewProps {
   onNavigate: (tab: string) => void;
 }
 
 export function HomeView({ onNavigate }: HomeViewProps) {
-  const walletBalance = 15750.50;
+  const { wallet, autoTopUpRules, toggleAutoTopUpRule, transactions } = useWallet();
+  const { profile } = useAuth();
 
-  const autoTopUpRules = [
-    { id: "1", type: "data" as const, threshold: "50MB", amount: 500, enabled: true },
-    { id: "2", type: "airtime" as const, threshold: "₦100", amount: 200, enabled: true },
-  ];
+  const displayName = profile?.full_name?.split(" ")[0] || "User";
+
+  // Map auto top-up rules to display format
+  const displayRules = autoTopUpRules.map((rule) => ({
+    id: rule.id,
+    type: rule.type as "data" | "airtime",
+    threshold: rule.type === "data" ? `${rule.threshold_percentage}%` : `${rule.threshold_percentage}%`,
+    amount: rule.topup_amount,
+    enabled: rule.is_enabled,
+  }));
+
+  // Calculate usage stats from transactions
+  const monthlyTransactions = transactions.filter((tx) => {
+    const txDate = new Date(tx.created_at);
+    const now = new Date();
+    return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+  });
+
+  const dataSpent = monthlyTransactions
+    .filter((tx) => tx.type === "data_purchase")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const airtimeSpent = monthlyTransactions
+    .filter((tx) => tx.type === "airtime_purchase")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const autoTopUps = monthlyTransactions.filter((tx) => tx.type === "auto_topup").length;
 
   const usageData = [
-    { label: "Data Used", current: 5.2, previous: 4.8, unit: "GB", color: "text-accent" },
-    { label: "Airtime Spent", current: 2500, previous: 3100, unit: "₦", color: "text-primary" },
-    { label: "Auto Top-Ups", current: 8, previous: 6, unit: "", color: "text-foreground" },
-    { label: "Savings", current: 850, previous: 600, unit: "₦", color: "text-primary" },
+    { label: "Data Spent", current: dataSpent, previous: 0, unit: "₦", color: "text-accent" },
+    { label: "Airtime Spent", current: airtimeSpent, previous: 0, unit: "₦", color: "text-primary" },
+    { label: "Auto Top-Ups", current: autoTopUps, previous: 0, unit: "", color: "text-foreground" },
+    { label: "Total Deposits", current: monthlyTransactions.filter(tx => tx.type === "deposit").reduce((sum, tx) => sum + tx.amount, 0), previous: 0, unit: "₦", color: "text-primary" },
   ];
 
   const handleToggleRule = (id: string) => {
-    console.log("Toggle rule:", id);
+    toggleAutoTopUpRule(id);
   };
 
   return (
@@ -40,7 +66,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Good morning</p>
-            <h1 className="text-xl font-bold text-foreground">Adebayo</h1>
+            <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center relative">
@@ -57,7 +83,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       {/* Content */}
       <div className="px-5 py-6 space-y-6">
         <WalletCard
-          balance={walletBalance}
+          balance={wallet?.balance || 0}
           onAddFunds={() => onNavigate("wallet")}
         />
 
@@ -72,7 +98,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
         />
 
         <AutoTopUpStatus
-          rules={autoTopUpRules}
+          rules={displayRules}
           onToggle={handleToggleRule}
           onViewAll={() => onNavigate("topup")}
         />
