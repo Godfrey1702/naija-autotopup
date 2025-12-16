@@ -23,22 +23,50 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SettingsViewProps {
   onBack: () => void;
 }
 
+// Helper to mask phone number for privacy display
+function maskPhoneNumber(phone: string | null | undefined): string {
+  if (!phone) return "Not linked";
+  if (phone.length < 6) return phone;
+  const firstPart = phone.slice(0, 4);
+  const lastPart = phone.slice(-4);
+  return `${firstPart}****${lastPart}`;
+}
+
+// Helper to get initials from name
+function getInitials(name: string | null | undefined): string {
+  if (!name) return "U";
+  const parts = name.trim().split(" ");
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return name[0].toUpperCase();
+}
+
 export function SettingsView({ onBack }: SettingsViewProps) {
+  const { profile, user, signOut } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState("10000");
+
+  // Get user data from auth context
+  const displayName = profile?.full_name || "User";
+  const email = user?.email || "No email";
+  const phoneNumber = profile?.phone_number;
+  const initials = getInitials(profile?.full_name);
+  const maskedPhone = maskPhoneNumber(phoneNumber);
 
   const settingsGroups = [
     {
       title: "Account",
       items: [
-        { icon: User, label: "Profile", value: "Adebayo Oluwaseun", action: true },
-        { icon: Smartphone, label: "Linked Phone", value: "0803****5678", action: true },
+        { icon: User, label: "Profile", value: displayName, action: true },
+        { icon: Smartphone, label: "Linked Phone", value: maskedPhone, action: true },
       ],
     },
     {
@@ -61,6 +89,10 @@ export function SettingsView({ onBack }: SettingsViewProps) {
       ],
     },
   ];
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <div className="min-h-screen gradient-hero pb-24">
@@ -94,12 +126,14 @@ export function SettingsView({ onBack }: SettingsViewProps) {
           <Card variant="gradient" className="p-5">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center text-primary-foreground text-2xl font-bold">
-                AO
+                {initials}
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground">Adebayo Oluwaseun</h3>
-                <p className="text-sm text-muted-foreground">adebayo@email.com</p>
-                <p className="text-xs text-primary mt-1">Premium Member</p>
+                <h3 className="font-semibold text-foreground">{displayName}</h3>
+                <p className="text-sm text-muted-foreground">{email}</p>
+                <p className="text-xs text-primary mt-1">
+                  {profile?.phone_verified ? "Verified User" : "Unverified"}
+                </p>
               </div>
               <Button variant="ghost" size="icon">
                 <Edit2 className="w-4 h-4" />
@@ -204,7 +238,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10">
+          <Button 
+            variant="outline" 
+            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={handleLogout}
+          >
             <LogOut className="w-4 h-4" />
             Log Out
           </Button>
