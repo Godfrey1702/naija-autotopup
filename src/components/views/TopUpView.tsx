@@ -1,10 +1,11 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronLeft, Zap, Plus, Smartphone, Wifi, Trash2 } from "lucide-react";
+import { ChevronLeft, Zap, Plus, Smartphone, Wifi, Trash2, Phone, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useWallet } from "@/contexts/WalletContext";
+import { usePhoneNumbers } from "@/contexts/PhoneNumberContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface TopUpViewProps {
   onBack: () => void;
@@ -20,16 +30,20 @@ interface TopUpViewProps {
 
 export function TopUpView({ onBack }: TopUpViewProps) {
   const { autoTopUpRules, createAutoTopUpRule, deleteAutoTopUpRule, toggleAutoTopUpRule } = useWallet();
+  const { allPhoneNumbers } = usePhoneNumbers();
+  const { profile } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [newRule, setNewRule] = useState<{
     type: "data" | "airtime";
     threshold: number;
     amount: number;
+    phoneNumberId: string | null;
   }>({
     type: "data",
     threshold: 20,
     amount: 500,
+    phoneNumberId: null, // null = primary phone
   });
 
   const toggleRule = (id: string) => {
@@ -42,13 +56,31 @@ export function TopUpView({ onBack }: TopUpViewProps) {
 
   const addRule = async () => {
     setIsLoading(true);
-    const { error } = await createAutoTopUpRule(newRule.type, newRule.threshold, newRule.amount);
+    const { error } = await createAutoTopUpRule(
+      newRule.type, 
+      newRule.threshold, 
+      newRule.amount,
+      newRule.phoneNumberId
+    );
     setIsLoading(false);
     
     if (!error) {
       setIsDialogOpen(false);
-      setNewRule({ type: "data", threshold: 20, amount: 500 });
+      setNewRule({ type: "data", threshold: 20, amount: 500, phoneNumberId: null });
     }
+  };
+
+  // Get phone number display for a rule
+  const getPhoneDisplay = (phoneNumberId: string | null) => {
+    if (!phoneNumberId) {
+      // Primary phone
+      return profile?.phone_number ? `${profile.phone_number.slice(0, 4)}****${profile.phone_number.slice(-3)}` : "Primary";
+    }
+    const phone = allPhoneNumbers.find(p => p.id === phoneNumberId);
+    if (phone) {
+      return `${phone.phone_number.slice(0, 4)}****${phone.phone_number.slice(-3)}`;
+    }
+    return "Unknown";
   };
 
   return (
@@ -166,6 +198,41 @@ export function TopUpView({ onBack }: TopUpViewProps) {
                     />
                   </div>
 
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Phone Number
+                    </label>
+                    <Select 
+                      value={newRule.phoneNumberId || "primary"} 
+                      onValueChange={(val) => setNewRule({ ...newRule, phoneNumberId: val === "primary" ? null : val })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select phone number" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allPhoneNumbers.map((phone) => (
+                          <SelectItem key={phone.id || "primary"} value={phone.id || "primary"}>
+                            <div className="flex items-center gap-2">
+                              {phone.is_primary && <Lock className="w-3 h-3 text-primary" />}
+                              <span>{phone.phone_number}</span>
+                              {phone.network_provider && (
+                                <Badge variant="secondary" className="text-xs ml-1">
+                                  {phone.network_provider}
+                                </Badge>
+                              )}
+                              {phone.is_primary && (
+                                <span className="text-xs text-primary">(Primary)</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select which phone number this rule applies to
+                    </p>
+                  </div>
+
                   <Button onClick={addRule} className="w-full" disabled={isLoading}>
                     {isLoading ? "Creating..." : "Create Rule"}
                   </Button>
@@ -194,7 +261,12 @@ export function TopUpView({ onBack }: TopUpViewProps) {
                       )}
                     </div>
                     <div>
-                      <p className="font-medium text-foreground capitalize">{rule.type}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground capitalize">{rule.type}</p>
+                        <Badge variant="outline" className="text-xs">
+                          {getPhoneDisplay(rule.phone_number_id)}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         Top up ₦{rule.topup_amount.toLocaleString()} when below {rule.threshold_percentage}%
                       </p>

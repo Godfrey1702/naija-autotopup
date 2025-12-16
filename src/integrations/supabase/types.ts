@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           id: string
           is_enabled: boolean
+          phone_number_id: string | null
           threshold_percentage: number
           topup_amount: number
           type: string
@@ -29,6 +30,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          phone_number_id?: string | null
           threshold_percentage?: number
           topup_amount: number
           type: string
@@ -39,9 +41,51 @@ export type Database = {
           created_at?: string
           id?: string
           is_enabled?: boolean
+          phone_number_id?: string | null
           threshold_percentage?: number
           topup_amount?: number
           type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_topup_rules_phone_number_id_fkey"
+            columns: ["phone_number_id"]
+            isOneToOne: false
+            referencedRelation: "phone_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phone_numbers: {
+        Row: {
+          created_at: string
+          id: string
+          is_verified: boolean
+          label: string | null
+          network_provider: string | null
+          phone_number: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_verified?: boolean
+          label?: string | null
+          network_provider?: string | null
+          phone_number: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_verified?: boolean
+          label?: string | null
+          network_provider?: string | null
+          phone_number?: string
           updated_at?: string
           user_id?: string
         }

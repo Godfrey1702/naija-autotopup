@@ -27,13 +27,14 @@ interface Transaction {
   created_at: string;
 }
 
-interface AutoTopUpRule {
+export interface AutoTopUpRule {
   id: string;
   user_id: string;
   type: "data" | "airtime";
   threshold_percentage: number;
   topup_amount: number;
   is_enabled: boolean;
+  phone_number_id: string | null; // null means primary phone
   created_at: string;
   updated_at: string;
 }
@@ -45,7 +46,7 @@ interface WalletContextType {
   loading: boolean;
   refreshWallet: () => Promise<void>;
   fundWallet: (amount: number, reference?: string) => Promise<{ error: Error | null }>;
-  createAutoTopUpRule: (type: "data" | "airtime", threshold: number, amount: number) => Promise<{ error: Error | null }>;
+  createAutoTopUpRule: (type: "data" | "airtime", threshold: number, amount: number, phoneNumberId?: string | null) => Promise<{ error: Error | null }>;
   updateAutoTopUpRule: (id: string, updates: Partial<AutoTopUpRule>) => Promise<{ error: Error | null }>;
   deleteAutoTopUpRule: (id: string) => Promise<{ error: Error | null }>;
   toggleAutoTopUpRule: (id: string) => Promise<{ error: Error | null }>;
@@ -138,6 +139,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         ...rule,
         type: rule.type as "data" | "airtime",
         topup_amount: Number(rule.topup_amount),
+        phone_number_id: rule.phone_number_id,
       }))
     );
   };
@@ -204,7 +206,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     return { error: null };
   };
 
-  const createAutoTopUpRule = async (type: "data" | "airtime", threshold: number, amount: number) => {
+  const createAutoTopUpRule = async (type: "data" | "airtime", threshold: number, amount: number, phoneNumberId?: string | null) => {
     if (!user) return { error: new Error("Not authenticated") };
 
     const { error } = await supabase.from("auto_topup_rules").insert({
@@ -213,13 +215,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       threshold_percentage: threshold,
       topup_amount: amount,
       is_enabled: true,
+      phone_number_id: phoneNumberId || null,
     });
 
     if (error) {
       console.error("Error creating rule:", error);
       toast({
         title: "Error",
-        description: "Failed to create auto top-up rule. You may already have a rule for this type.",
+        description: "Failed to create auto top-up rule. You may already have a rule for this type and phone number.",
         variant: "destructive",
       });
       return { error };
