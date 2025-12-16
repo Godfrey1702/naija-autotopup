@@ -7,6 +7,7 @@ import { UsageOverview } from "@/components/dashboard/UsageOverview";
 import { BudgetCard } from "@/components/dashboard/BudgetCard";
 import { useWallet } from "@/contexts/WalletContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGreeting } from "@/hooks/useGreeting";
 
 interface HomeViewProps {
   onNavigate: (tab: string) => void;
@@ -15,6 +16,7 @@ interface HomeViewProps {
 export function HomeView({ onNavigate }: HomeViewProps) {
   const { wallet, autoTopUpRules, toggleAutoTopUpRule, transactions } = useWallet();
   const { profile } = useAuth();
+  const { greeting } = useGreeting();
 
   const displayName = profile?.full_name?.split(" ")[0] || "User";
 
@@ -65,7 +67,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Good morning</p>
+            <p className="text-sm text-muted-foreground">{greeting}</p>
             <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
           </div>
           <div className="flex items-center gap-2">

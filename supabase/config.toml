@@ -1,1 +1,4 @@
 project_id = "gukzpbzqprlxtdxhopxl"
+
+[functions.get-greeting]
+verify_jwt = false
