@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { PhoneNumberManagement } from "@/components/settings/PhoneNumberManagement";
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -52,21 +53,20 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const { profile, user, signOut } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
+  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState("10000");
 
   // Get user data from auth context
   const displayName = profile?.full_name || "User";
   const email = user?.email || "No email";
-  const phoneNumber = profile?.phone_number;
   const initials = getInitials(profile?.full_name);
-  const maskedPhone = maskPhoneNumber(phoneNumber);
 
   const settingsGroups = [
     {
       title: "Account",
       items: [
         { icon: User, label: "Profile", value: displayName, action: true },
-        { icon: Smartphone, label: "Linked Phone", value: maskedPhone, action: true },
+        { icon: Smartphone, label: "Phone Numbers", value: "Manage", action: true, phoneDialog: true },
       ],
     },
     {
@@ -195,6 +195,29 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                             Save Budget
                           </Button>
                         </div>
+                      </DialogContent>
+                    </Dialog>
+                  ) : item.phoneDialog ? (
+                    <Dialog open={phoneDialogOpen} onOpenChange={setPhoneDialogOpen}>
+                      <DialogTrigger asChild>
+                        <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                              <item.icon className="w-5 h-5 text-foreground" />
+                            </div>
+                            <span className="font-medium text-foreground">{item.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">{item.value}</span>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-card border-border max-w-md max-h-[85vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Phone Numbers</DialogTitle>
+                        </DialogHeader>
+                        <PhoneNumberManagement />
                       </DialogContent>
                     </Dialog>
                   ) : item.toggle ? (
