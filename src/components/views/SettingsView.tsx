@@ -50,7 +50,7 @@ function getInitials(name: string | null | undefined): string {
 }
 
 export function SettingsView({ onBack }: SettingsViewProps) {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, isKYCVerified } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
@@ -60,6 +60,23 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const displayName = profile?.full_name || "User";
   const email = user?.email || "No email";
   const initials = getInitials(profile?.full_name);
+
+  // Get KYC status display
+  const getKYCStatus = () => {
+    if (!profile) return { label: "Not Started", color: "text-muted-foreground" };
+    switch (profile.kyc_status) {
+      case "verified":
+        return { label: "Verified", color: "text-primary" };
+      case "pending":
+        return { label: "Pending", color: "text-yellow-500" };
+      case "rejected":
+        return { label: "Rejected", color: "text-destructive" };
+      default:
+        return { label: "Not Started", color: "text-muted-foreground" };
+    }
+  };
+
+  const kycStatus = getKYCStatus();
 
   const settingsGroups = [
     {
@@ -77,9 +94,9 @@ export function SettingsView({ onBack }: SettingsViewProps) {
       ],
     },
     {
-      title: "Security",
+      title: "Security & KYC",
       items: [
-        { icon: Shield, label: "Security Settings", value: "PIN enabled", action: true },
+        { icon: Shield, label: "KYC Status", value: kycStatus.label, valueColor: kycStatus.color, action: !isKYCVerified },
       ],
     },
     {
@@ -131,9 +148,15 @@ export function SettingsView({ onBack }: SettingsViewProps) {
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground">{displayName}</h3>
                 <p className="text-sm text-muted-foreground">{email}</p>
-                <p className="text-xs text-primary mt-1">
-                  {profile?.phone_verified ? "Verified User" : "Unverified"}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-xs ${profile?.phone_verified ? "text-primary" : "text-muted-foreground"}`}>
+                    {profile?.phone_verified ? "Phone Verified" : "Phone Unverified"}
+                  </span>
+                  <span className="text-muted-foreground">•</span>
+                  <span className={`text-xs ${kycStatus.color}`}>
+                    KYC: {kycStatus.label}
+                  </span>
+                </div>
               </div>
               <Button variant="ghost" size="icon">
                 <Edit2 className="w-4 h-4" />
@@ -243,7 +266,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                       </div>
                       {item.action && (
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">{item.value}</span>
+                          <span className={`text-sm ${(item as any).valueColor || "text-muted-foreground"}`}>{item.value}</span>
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
                       )}

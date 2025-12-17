@@ -96,7 +96,10 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          kyc_status: string
+          kyc_verified_at: string | null
           network_provider: string | null
+          nin_number: string | null
           phone_number: string | null
           phone_verified: boolean | null
           updated_at: string
@@ -106,7 +109,10 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          kyc_status?: string
+          kyc_verified_at?: string | null
           network_provider?: string | null
+          nin_number?: string | null
           phone_number?: string | null
           phone_verified?: boolean | null
           updated_at?: string
@@ -116,7 +122,10 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          kyc_status?: string
+          kyc_verified_at?: string | null
           network_provider?: string | null
+          nin_number?: string | null
           phone_number?: string | null
           phone_verified?: boolean | null
           updated_at?: string

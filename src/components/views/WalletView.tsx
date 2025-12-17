@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronLeft, Plus, ArrowDownLeft, ArrowUpRight, CreditCard, Building2 } from "lucide-react";
+import { ChevronLeft, Plus, ArrowDownLeft, ArrowUpRight, CreditCard, Building2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,25 +12,43 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useWallet } from "@/contexts/WalletContext";
-import { formatDistanceToNow } from "date-fns";
+import { PAYMENT_LIMITS, validateTopUp, formatCurrency } from "@/lib/constants";
 
 interface WalletViewProps {
   onBack: () => void;
 }
 
-const quickAmounts = [500, 1000, 2000, 5000, 10000];
+const quickAmounts = [5000, 10000, 20000, 50000, 100000];
 
 export function WalletView({ onBack }: WalletViewProps) {
   const { wallet, transactions, fundWallet } = useWallet();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [fundAmount, setFundAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const balance = wallet?.balance || 0;
+  const maxAllowedTopUp = PAYMENT_LIMITS.MAX_WALLET_BALANCE - balance;
+
+  const handleAmountChange = (value: string) => {
+    setFundAmount(value);
+    const amount = Number(value);
+    if (amount > 0) {
+      const validation = validateTopUp(amount, balance);
+      setValidationError(validation.valid ? null : validation.error || null);
+    } else {
+      setValidationError(null);
+    }
+  };
 
   const handleFund = async () => {
     const amount = Number(fundAmount);
-    if (amount < 100) return;
+    const validation = validateTopUp(amount, balance);
+    
+    if (!validation.valid) {
+      setValidationError(validation.error || "Invalid amount");
+      return;
+    }
 
     setIsLoading(true);
     const { error } = await fundWallet(amount);
@@ -39,6 +57,7 @@ export function WalletView({ onBack }: WalletViewProps) {
     if (!error) {
       setIsDialogOpen(false);
       setFundAmount("");
+      setValidationError(null);
     }
   };
 
@@ -119,17 +138,35 @@ export function WalletView({ onBack }: WalletViewProps) {
                     <DialogTitle>Fund Your Wallet</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
+                    {/* Limits Info */}
+                    <Card variant="gradient" className="p-3 border-primary/30">
+                      <p className="text-xs text-muted-foreground">
+                        Min: {formatCurrency(PAYMENT_LIMITS.MIN_TOPUP_AMOUNT)} • Max Balance: {formatCurrency(PAYMENT_LIMITS.MAX_WALLET_BALANCE)}
+                      </p>
+                    </Card>
+
                     <div>
                       <label className="text-sm font-medium text-foreground mb-2 block">
                         Amount (₦)
                       </label>
                       <Input
                         type="number"
-                        placeholder="Enter amount"
+                        placeholder={`Min ${formatCurrency(PAYMENT_LIMITS.MIN_TOPUP_AMOUNT)}`}
                         value={fundAmount}
-                        onChange={(e) => setFundAmount(e.target.value)}
-                        className="h-14 text-lg"
+                        onChange={(e) => handleAmountChange(e.target.value)}
+                        className={`h-14 text-lg ${validationError ? "border-destructive" : ""}`}
                       />
+                      {validationError && (
+                        <p className="text-sm text-destructive mt-2 flex items-center gap-1">
+                          <AlertCircle className="w-4 h-4" />
+                          {validationError}
+                        </p>
+                      )}
+                      {maxAllowedTopUp < PAYMENT_LIMITS.MAX_WALLET_BALANCE && !validationError && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          You can add up to {formatCurrency(maxAllowedTopUp)} more
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -140,10 +177,13 @@ export function WalletView({ onBack }: WalletViewProps) {
                         {quickAmounts.map((amount) => (
                           <button
                             key={amount}
-                            onClick={() => setFundAmount(amount.toString())}
-                            className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                            onClick={() => handleAmountChange(amount.toString())}
+                            disabled={amount > maxAllowedTopUp}
+                            className={`py-2 px-2 rounded-lg text-xs font-medium transition-all ${
                               fundAmount === amount.toString()
                                 ? "bg-primary text-primary-foreground"
+                                : amount > maxAllowedTopUp
+                                ? "bg-secondary/50 text-muted-foreground cursor-not-allowed"
                                 : "bg-secondary text-foreground hover:bg-secondary/80"
                             }`}
                           >
@@ -171,10 +211,10 @@ export function WalletView({ onBack }: WalletViewProps) {
 
                     <Button
                       onClick={handleFund}
-                      disabled={!fundAmount || Number(fundAmount) < 100 || isLoading}
+                      disabled={!fundAmount || !!validationError || isLoading}
                       className="w-full"
                     >
-                      {isLoading ? "Processing..." : `Fund ₦${fundAmount ? Number(fundAmount).toLocaleString() : "0"}`}
+                      {isLoading ? "Processing..." : `Fund ${fundAmount ? formatCurrency(Number(fundAmount)) : "₦0"}`}
                     </Button>
                   </div>
                 </DialogContent>

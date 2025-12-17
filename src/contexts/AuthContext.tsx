@@ -2,13 +2,16 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-interface Profile {
+export interface Profile {
   id: string;
   user_id: string;
   phone_number: string | null;
   phone_verified: boolean;
   network_provider: string | null;
   full_name: string | null;
+  nin_number: string | null;
+  kyc_status: "pending" | "verified" | "rejected";
+  kyc_verified_at: string | null;
 }
 
 interface AuthContextType {
@@ -20,6 +23,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: Error | null }>;
+  submitKYC: (ninNumber: string) => Promise<{ error: Error | null }>;
+  isKYCVerified: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -128,6 +133,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  const submitKYC = async (ninNumber: string) => {
+    if (!user) return { error: new Error("No user logged in") };
+
+    // In production, this would verify NIN with NIMC API
+    // For now, we simulate verification
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        nin_number: ninNumber,
+        kyc_status: "verified", // In production: "pending" until backend verifies
+        kyc_verified_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    if (!error && profile) {
+      setProfile({
+        ...profile,
+        nin_number: ninNumber,
+        kyc_status: "verified",
+        kyc_verified_at: new Date().toISOString(),
+      });
+    }
+
+    return { error: error as Error | null };
+  };
+
+  const isKYCVerified = profile?.kyc_status === "verified";
+
   return (
     <AuthContext.Provider
       value={{
@@ -139,6 +172,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signIn,
         signOut,
         updateProfile,
+        submitKYC,
+        isKYCVerified,
       }}
     >
       {children}
