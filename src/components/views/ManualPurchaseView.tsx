@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronLeft, Smartphone, Wifi, Phone, Lock, CheckCircle, Loader2 } from "lucide-react";
+import { ChevronLeft, Smartphone, Wifi, Phone, Lock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useWallet } from "@/contexts/WalletContext";
 import { usePhoneNumbers } from "@/contexts/PhoneNumberContext";
+import { TransactionReceipt } from "@/components/receipt/TransactionReceipt";
 
 interface ManualPurchaseViewProps {
   onBack: () => void;
@@ -30,6 +31,16 @@ const DATA_PLANS = [
   { amount: 3000, label: "10GB - 30 Days" },
 ];
 
+interface ReceiptData {
+  type: "airtime" | "data";
+  amount: number;
+  phoneNumber: string;
+  reference: string;
+  date: Date;
+  networkProvider?: string;
+  planDetails?: string;
+}
+
 export function ManualPurchaseView({ onBack, initialType = "airtime" }: ManualPurchaseViewProps) {
   const { wallet, purchaseAirtimeOrData } = useWallet();
   const { allPhoneNumbers } = usePhoneNumbers();
@@ -39,13 +50,20 @@ export function ManualPurchaseView({ onBack, initialType = "airtime" }: ManualPu
   const [amount, setAmount] = useState<number>(0);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
   const selectedPhone = allPhoneNumbers.find(
     p => (p.id || "primary") === selectedPhoneId
   );
 
   const finalAmount = customAmount ? Number(customAmount) : amount;
+
+  // Get selected data plan label
+  const getDataPlanLabel = () => {
+    if (purchaseType !== "data") return undefined;
+    const plan = DATA_PLANS.find(p => p.amount === amount);
+    return plan?.label;
+  };
 
   const handlePurchase = async () => {
     if (!finalAmount || finalAmount <= 0) return;
@@ -61,34 +79,41 @@ export function ManualPurchaseView({ onBack, initialType = "airtime" }: ManualPu
     setIsLoading(false);
 
     if (!error) {
-      setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-        setAmount(0);
-        setCustomAmount("");
-      }, 2000);
+      setReceiptData({
+        type: purchaseType,
+        amount: finalAmount,
+        phoneNumber: selectedPhone.phone_number,
+        reference: `${purchaseType.toUpperCase()}-${Date.now()}`,
+        date: new Date(),
+        networkProvider: selectedPhone.network_provider || undefined,
+        planDetails: getDataPlanLabel(),
+      });
     }
+  };
+
+  const handleReceiptClose = () => {
+    setReceiptData(null);
+    setAmount(0);
+    setCustomAmount("");
+    onBack();
   };
 
   const canPurchase = finalAmount > 0 && (wallet?.balance || 0) >= finalAmount;
 
-  if (success) {
+  // Show receipt after successful purchase
+  if (receiptData) {
     return (
-      <div className="min-h-screen gradient-hero flex items-center justify-center p-5">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="text-center"
-        >
-          <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-primary" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">Purchase Successful!</h2>
-          <p className="text-muted-foreground">
-            ₦{finalAmount.toLocaleString()} {purchaseType} sent to {selectedPhone?.phone_number}
-          </p>
-        </motion.div>
-      </div>
+      <TransactionReceipt
+        type={receiptData.type}
+        amount={receiptData.amount}
+        phoneNumber={receiptData.phoneNumber}
+        reference={receiptData.reference}
+        date={receiptData.date}
+        status="completed"
+        networkProvider={receiptData.networkProvider}
+        planDetails={receiptData.planDetails}
+        onClose={handleReceiptClose}
+      />
     );
   }
 
