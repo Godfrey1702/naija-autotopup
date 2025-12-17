@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { PAYMENT_LIMITS, validateTopUp, formatCurrency } from "@/lib/constants";
 
 interface Wallet {
   id: string;
@@ -165,6 +166,17 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const fundWallet = async (amount: number, reference?: string) => {
     if (!user || !wallet) return { error: new Error("No wallet available") };
 
+    // Validate payment limits
+    const validation = validateTopUp(amount, wallet.balance);
+    if (!validation.valid) {
+      toast({
+        title: "Top-Up Limit",
+        description: validation.error,
+        variant: "destructive",
+      });
+      return { error: new Error(validation.error) };
+    }
+
     const balanceBefore = wallet.balance;
     const balanceAfter = balanceBefore + amount;
     const txReference = reference || `DEP-${Date.now()}`;
@@ -184,6 +196,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
     if (txError) {
       console.error("Error creating transaction:", txError);
+      // Check if it's the balance constraint error
+      if (txError.message?.includes("wallet_balance_max")) {
+        toast({
+          title: "Balance Limit Exceeded",
+          description: `Maximum wallet balance is ${formatCurrency(PAYMENT_LIMITS.MAX_WALLET_BALANCE)}`,
+          variant: "destructive",
+        });
+      }
       return { error: txError };
     }
 
@@ -195,13 +215,20 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
     if (walletError) {
       console.error("Error updating wallet:", walletError);
+      if (walletError.message?.includes("wallet_balance_max")) {
+        toast({
+          title: "Balance Limit Exceeded",
+          description: `Maximum wallet balance is ${formatCurrency(PAYMENT_LIMITS.MAX_WALLET_BALANCE)}`,
+          variant: "destructive",
+        });
+      }
       return { error: walletError };
     }
 
     await refreshWallet();
     toast({
       title: "Wallet Funded",
-      description: `₦${amount.toLocaleString()} has been added to your wallet.`,
+      description: `${formatCurrency(amount)} has been added to your wallet.`,
     });
 
     return { error: null };

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { PhoneVerification } from "@/components/onboarding/PhoneVerification";
+import { KYCVerification } from "@/components/kyc/KYCVerification";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { HomeView } from "@/components/views/HomeView";
 import { TopUpView } from "@/components/views/TopUpView";
@@ -16,8 +17,9 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("home");
   const [purchaseType, setPurchaseType] = useState<"airtime" | "data">("airtime");
   const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [showKYCVerification, setShowKYCVerification] = useState(false);
   
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isKYCVerified } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,11 +29,20 @@ const Index = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    // Show phone verification if user is logged in but phone not verified
-    if (user && profile && !profile.phone_verified) {
-      setShowPhoneVerification(true);
+    // Check onboarding flow: Phone verification → KYC verification
+    if (user && profile) {
+      if (!profile.phone_verified) {
+        setShowPhoneVerification(true);
+        setShowKYCVerification(false);
+      } else if (!isKYCVerified) {
+        setShowPhoneVerification(false);
+        setShowKYCVerification(true);
+      } else {
+        setShowPhoneVerification(false);
+        setShowKYCVerification(false);
+      }
     }
-  }, [user, profile]);
+  }, [user, profile, isKYCVerified]);
 
   if (loading) {
     return (
@@ -54,6 +65,16 @@ const Index = () => {
       <PhoneVerification
         onComplete={() => setShowPhoneVerification(false)}
         onSkip={() => setShowPhoneVerification(false)}
+      />
+    );
+  }
+
+  // KYC verification flow
+  if (showKYCVerification) {
+    return (
+      <KYCVerification
+        onComplete={() => setShowKYCVerification(false)}
+        onSkip={() => setShowKYCVerification(false)}
       />
     );
   }
