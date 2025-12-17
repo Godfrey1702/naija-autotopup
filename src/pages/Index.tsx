@@ -9,10 +9,12 @@ import { TopUpView } from "@/components/views/TopUpView";
 import { WalletView } from "@/components/views/WalletView";
 import { AnalyticsView } from "@/components/views/AnalyticsView";
 import { SettingsView } from "@/components/views/SettingsView";
+import { ManualPurchaseView } from "@/components/views/ManualPurchaseView";
 import { Loader2 } from "lucide-react";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("home");
+  const [purchaseType, setPurchaseType] = useState<"airtime" | "data">("airtime");
   const [showPhoneVerification, setShowPhoneVerification] = useState(false);
   
   const { user, profile, loading } = useAuth();
@@ -56,11 +58,20 @@ const Index = () => {
     );
   }
 
+  const handleNavigate = (tab: string) => {
+    if (tab === "airtime" || tab === "data") {
+      setPurchaseType(tab);
+      setActiveTab("purchase");
+    } else {
+      setActiveTab(tab);
+    }
+  };
+
   // Main app
   const renderView = () => {
     switch (activeTab) {
       case "home":
-        return <HomeView onNavigate={setActiveTab} />;
+        return <HomeView onNavigate={handleNavigate} />;
       case "topup":
         return <TopUpView onBack={() => setActiveTab("home")} />;
       case "wallet":
@@ -69,8 +80,10 @@ const Index = () => {
         return <AnalyticsView onBack={() => setActiveTab("home")} />;
       case "settings":
         return <SettingsView onBack={() => setActiveTab("home")} />;
+      case "purchase":
+        return <ManualPurchaseView onBack={() => setActiveTab("home")} initialType={purchaseType} />;
       default:
-        return <HomeView onNavigate={setActiveTab} />;
+        return <HomeView onNavigate={handleNavigate} />;
     }
   };
 

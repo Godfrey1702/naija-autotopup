@@ -46,6 +46,7 @@ interface WalletContextType {
   loading: boolean;
   refreshWallet: () => Promise<void>;
   fundWallet: (amount: number, reference?: string) => Promise<{ error: Error | null }>;
+  purchaseAirtimeOrData: (type: "airtime" | "data", amount: number, phoneNumber: string, phoneNumberId: string | null) => Promise<{ error: Error | null }>;
   createAutoTopUpRule: (type: "data" | "airtime", threshold: number, amount: number, phoneNumberId?: string | null) => Promise<{ error: Error | null }>;
   updateAutoTopUpRule: (id: string, updates: Partial<AutoTopUpRule>) => Promise<{ error: Error | null }>;
   deleteAutoTopUpRule: (id: string) => Promise<{ error: Error | null }>;
@@ -206,6 +207,64 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     return { error: null };
   };
 
+  const purchaseAirtimeOrData = async (
+    type: "airtime" | "data",
+    amount: number,
+    phoneNumber: string,
+    phoneNumberId: string | null
+  ) => {
+    if (!user || !wallet) return { error: new Error("No wallet available") };
+    if (wallet.balance < amount) return { error: new Error("Insufficient balance") };
+
+    const balanceBefore = wallet.balance;
+    const balanceAfter = balanceBefore - amount;
+    const txReference = `${type.toUpperCase()}-${Date.now()}`;
+    const txType = type === "airtime" ? "airtime_purchase" : "data_purchase";
+
+    // Create transaction
+    const { error: txError } = await supabase.from("transactions").insert({
+      wallet_id: wallet.id,
+      user_id: user.id,
+      type: txType,
+      amount,
+      balance_before: balanceBefore,
+      balance_after: balanceAfter,
+      status: "completed",
+      reference: txReference,
+      description: `${type === "airtime" ? "Airtime" : "Data"} purchase for ${phoneNumber}`,
+      metadata: { phone_number: phoneNumber, phone_number_id: phoneNumberId },
+    });
+
+    if (txError) {
+      console.error("Error creating transaction:", txError);
+      toast({
+        title: "Purchase Failed",
+        description: "Could not complete the purchase. Please try again.",
+        variant: "destructive",
+      });
+      return { error: txError };
+    }
+
+    // Update wallet balance
+    const { error: walletError } = await supabase
+      .from("wallets")
+      .update({ balance: balanceAfter })
+      .eq("id", wallet.id);
+
+    if (walletError) {
+      console.error("Error updating wallet:", walletError);
+      return { error: walletError };
+    }
+
+    await refreshWallet();
+    toast({
+      title: "Purchase Successful",
+      description: `₦${amount.toLocaleString()} ${type} sent to ${phoneNumber}`,
+    });
+
+    return { error: null };
+  };
+
   const createAutoTopUpRule = async (type: "data" | "airtime", threshold: number, amount: number, phoneNumberId?: string | null) => {
     if (!user) return { error: new Error("Not authenticated") };
 
@@ -288,6 +347,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         loading,
         refreshWallet,
         fundWallet,
+        purchaseAirtimeOrData,
         createAutoTopUpRule,
         updateAutoTopUpRule,
         deleteAutoTopUpRule,
