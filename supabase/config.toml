@@ -2,3 +2,6 @@ project_id = "gukzpbzqprlxtdxhopxl"
 
 [functions.get-greeting]
 verify_jwt = false
+
+[functions.payflex-data-topup]
+verify_jwt = false

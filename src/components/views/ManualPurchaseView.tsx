@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronLeft, Smartphone, Wifi, Phone, Lock, Loader2 } from "lucide-react";
+import { ChevronLeft, Smartphone, Wifi, Phone, Lock, Loader2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useWallet } from "@/contexts/WalletContext";
 import { usePhoneNumbers } from "@/contexts/PhoneNumberContext";
 import { TransactionReceipt } from "@/components/receipt/TransactionReceipt";
+import { DATA_PLANS, formatCurrency, PRICING_MARGIN } from "@/lib/constants";
 
 interface ManualPurchaseViewProps {
   onBack: () => void;
@@ -22,14 +29,6 @@ interface ManualPurchaseViewProps {
 }
 
 const AIRTIME_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
-const DATA_PLANS = [
-  { amount: 300, label: "500MB - 1 Day" },
-  { amount: 500, label: "1GB - 1 Day" },
-  { amount: 1000, label: "2GB - 7 Days" },
-  { amount: 1500, label: "3GB - 30 Days" },
-  { amount: 2000, label: "5GB - 30 Days" },
-  { amount: 3000, label: "10GB - 30 Days" },
-];
 
 interface ReceiptData {
   type: "airtime" | "data";
@@ -61,7 +60,7 @@ export function ManualPurchaseView({ onBack, initialType = "airtime" }: ManualPu
   // Get selected data plan label
   const getDataPlanLabel = () => {
     if (purchaseType !== "data") return undefined;
-    const plan = DATA_PLANS.find(p => p.amount === amount);
+    const plan = DATA_PLANS.find(p => p.finalPrice === amount);
     return plan?.label;
   };
 
@@ -268,21 +267,39 @@ export function ManualPurchaseView({ onBack, initialType = "airtime" }: ManualPu
             </>
           ) : (
             <div className="space-y-2">
+              <TooltipProvider>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs text-muted-foreground">Prices include {PRICING_MARGIN * 100}% service fee</span>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Info className="w-3 h-3 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">A small service fee is added to cover transaction costs</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
               {DATA_PLANS.map((plan) => (
                 <Card
-                  key={plan.amount}
+                  key={plan.id}
                   variant="gradient"
                   className={`p-4 cursor-pointer transition-all ${
-                    amount === plan.amount ? "border-accent ring-2 ring-accent/30" : ""
+                    amount === plan.finalPrice ? "border-accent ring-2 ring-accent/30" : ""
                   }`}
                   onClick={() => {
-                    setAmount(plan.amount);
+                    setAmount(plan.finalPrice);
                     setCustomAmount("");
                   }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">{plan.label}</span>
-                    <span className="text-accent font-semibold">₦{plan.amount.toLocaleString()}</span>
+                    <div>
+                      <span className="font-medium">{plan.label}</span>
+                      <p className="text-xs text-muted-foreground">
+                        Base: {formatCurrency(plan.costPrice)}
+                      </p>
+                    </div>
+                    <span className="text-accent font-semibold">{formatCurrency(plan.finalPrice)}</span>
                   </div>
                 </Card>
               ))}
