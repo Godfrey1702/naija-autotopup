@@ -95,6 +95,8 @@ export function HomeView({ onNavigate }: HomeViewProps) {
               onNavigate("topup");
             } else if (action === "history") {
               onNavigate("analytics");
+            } else if (action === "airtime" || action === "data") {
+              onNavigate(action);
             }
           }}
         />
