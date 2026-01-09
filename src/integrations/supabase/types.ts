@@ -99,7 +99,6 @@ export type Database = {
           kyc_status: string
           kyc_verified_at: string | null
           network_provider: string | null
-          nin_number: string | null
           phone_number: string | null
           phone_verified: boolean | null
           updated_at: string
@@ -112,7 +111,6 @@ export type Database = {
           kyc_status?: string
           kyc_verified_at?: string | null
           network_provider?: string | null
-          nin_number?: string | null
           phone_number?: string | null
           phone_verified?: boolean | null
           updated_at?: string
@@ -125,7 +123,6 @@ export type Database = {
           kyc_status?: string
           kyc_verified_at?: string | null
           network_provider?: string | null
-          nin_number?: string | null
           phone_number?: string | null
           phone_verified?: boolean | null
           updated_at?: string
@@ -188,6 +185,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_kyc: {
+        Row: {
+          created_at: string
+          id: string
+          kyc_status: string
+          kyc_verified_at: string | null
+          nin_hash: string
+          nin_number_encrypted: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kyc_status?: string
+          kyc_verified_at?: string | null
+          nin_hash: string
+          nin_number_encrypted: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kyc_status?: string
+          kyc_verified_at?: string | null
+          nin_hash?: string
+          nin_number_encrypted?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       wallets: {
         Row: {

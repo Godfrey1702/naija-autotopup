@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * SECURITY NOTE: NIN (National Identity Number) is NOT stored in profiles table.
+ * NIN is stored in a separate `user_kyc` table with restricted RLS policies:
+ * - Users can only INSERT their NIN (no SELECT/UPDATE/DELETE)
+ * - NIN is encoded and hashed for additional protection
+ * - Only backend services with service_role can read NIN data
+ * This protects sensitive PII from potential RLS misconfigurations.
+ * See: security finding "profiles_table_nin_exposure"
+ */
 export interface Profile {
   id: string;
   user_id: string;
@@ -9,7 +18,7 @@ export interface Profile {
   phone_verified: boolean;
   network_provider: string | null;
   full_name: string | null;
-  nin_number: string | null;
+  // NIN removed from profiles - stored in user_kyc table for security
   kyc_status: "pending" | "verified" | "rejected";
   kyc_verified_at: string | null;
 }
@@ -133,30 +142,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  /**
+   * SECURITY FIX: NIN is now stored in a separate `user_kyc` table
+   * with restricted RLS policies (INSERT only, no SELECT).
+   * This protects NIN from exposure even if profiles RLS is misconfigured.
+   * The NIN is encoded and hashed before storage.
+   */
   const submitKYC = async (ninNumber: string) => {
     if (!user) return { error: new Error("No user logged in") };
 
-    // In production, this would verify NIN with NIMC API
-    // For now, we simulate verification
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        nin_number: ninNumber,
-        kyc_status: "verified", // In production: "pending" until backend verifies
-        kyc_verified_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id);
+    try {
+      // Encode NIN (base64) and create hash for secure storage
+      // In production, consider using more robust encryption
+      const ninEncoded = btoa(ninNumber);
+      const ninHashBuffer = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(ninNumber)
+      );
+      const ninHash = Array.from(new Uint8Array(ninHashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 
-    if (!error && profile) {
-      setProfile({
-        ...profile,
-        nin_number: ninNumber,
-        kyc_status: "verified",
-        kyc_verified_at: new Date().toISOString(),
-      });
+      // Store NIN in separate secure table (user_kyc)
+      // RLS only allows INSERT - users cannot read back their NIN
+      const { error: kycError } = await supabase
+        .from("user_kyc")
+        .insert({
+          user_id: user.id,
+          nin_number_encrypted: ninEncoded,
+          nin_hash: ninHash,
+          kyc_status: "verified", // In production: "pending" until backend verifies
+          kyc_verified_at: new Date().toISOString(),
+        });
+
+      if (kycError) {
+        // Handle duplicate - user already submitted KYC
+        if (kycError.code === '23505') {
+          return { error: new Error("KYC already submitted. Please contact support.") };
+        }
+        return { error: kycError as Error };
+      }
+
+      // Update profiles table with KYC status only (no NIN)
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          kyc_status: "verified",
+          kyc_verified_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+
+      if (profileError) {
+        return { error: profileError as Error };
+      }
+
+      if (profile) {
+        setProfile({
+          ...profile,
+          kyc_status: "verified",
+          kyc_verified_at: new Date().toISOString(),
+        });
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
     }
-
-    return { error: error as Error | null };
   };
 
   const isKYCVerified = profile?.kyc_status === "verified";

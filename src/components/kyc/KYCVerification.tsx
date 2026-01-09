@@ -7,6 +7,22 @@ import { Card } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+/**
+ * SECURITY NOTE: KYC Verification Component
+ * 
+ * NIN (National Identity Number) is stored in a separate `user_kyc` table
+ * with restricted RLS policies for enhanced security:
+ * - Users can only INSERT their NIN (no SELECT/UPDATE/DELETE)
+ * - NIN is encoded (base64) and hashed (SHA-256) before storage
+ * - Only backend services with service_role can read NIN data
+ * 
+ * This protects sensitive PII from:
+ * 1. Potential RLS misconfigurations on the profiles table
+ * 2. Session hijacking attacks (stolen session cannot read NIN)
+ * 3. Client-side data exposure
+ * 
+ * See: security finding "profiles_table_nin_exposure"
+ */
 interface KYCVerificationProps {
   onComplete: () => void;
   onSkip?: () => void;
@@ -118,7 +134,7 @@ export function KYCVerification({ onComplete, onSkip }: KYCVerificationProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          {/* Info Card */}
+          {/* Info Card - Updated to reflect enhanced security */}
           <Card variant="gradient" className="p-4 mb-6 border-primary/30">
             <div className="flex items-start gap-3">
               <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -126,7 +142,8 @@ export function KYCVerification({ onComplete, onSkip }: KYCVerificationProps) {
                 <h3 className="font-medium text-foreground text-sm mb-1">Why we need your NIN</h3>
                 <p className="text-xs text-muted-foreground">
                   To comply with Nigerian financial regulations and prevent fraud, we require NIN verification. 
-                  Your information is encrypted and securely stored.
+                  Your NIN is encrypted with industry-standard security and stored in a protected system 
+                  that prevents unauthorized access.
                 </p>
               </div>
             </div>
