@@ -143,64 +143,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   /**
-   * SECURITY FIX: NIN is now stored in a separate `user_kyc` table
-   * with restricted RLS policies (INSERT only, no SELECT).
-   * This protects NIN from exposure even if profiles RLS is misconfigured.
-   * The NIN is encoded and hashed before storage.
+   * SECURITY FIX: NIN verification is now handled by a secure backend edge function.
+   * 
+   * The edge function (verify-nin):
+   * 1. Validates NIN format
+   * 2. Verifies with NIMC API (mock for now, ready for production)
+   * 3. Stores NIN in user_kyc table with service_role (bypasses RLS)
+   * 4. Updates profiles with verification status
+   * 
+   * Benefits:
+   * - NIN never stored via client-side code
+   * - Server-side validation prevents tampering
+   * - Service role ensures secure database access
+   * - Ready for real NIMC API integration
    */
   const submitKYC = async (ninNumber: string) => {
     if (!user) return { error: new Error("No user logged in") };
 
     try {
-      // Encode NIN (base64) and create hash for secure storage
-      // In production, consider using more robust encryption
-      const ninEncoded = btoa(ninNumber);
-      const ninHashBuffer = await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(ninNumber)
-      );
-      const ninHash = Array.from(new Uint8Array(ninHashBuffer))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
+      // Call secure backend edge function for NIN verification
+      const { data, error } = await supabase.functions.invoke('verify-nin', {
+        body: { nin: ninNumber },
+      });
 
-      // Store NIN in separate secure table (user_kyc)
-      // RLS only allows INSERT - users cannot read back their NIN
-      const { error: kycError } = await supabase
-        .from("user_kyc")
-        .insert({
-          user_id: user.id,
-          nin_number_encrypted: ninEncoded,
-          nin_hash: ninHash,
-          kyc_status: "verified", // In production: "pending" until backend verifies
-          kyc_verified_at: new Date().toISOString(),
-        });
-
-      if (kycError) {
-        // Handle duplicate - user already submitted KYC
-        if (kycError.code === '23505') {
-          return { error: new Error("KYC already submitted. Please contact support.") };
-        }
-        return { error: kycError as Error };
+      if (error) {
+        return { error: new Error(error.message || 'Verification failed') };
       }
 
-      // Update profiles table with KYC status only (no NIN)
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          kyc_status: "verified",
-          kyc_verified_at: new Date().toISOString(),
-        })
-        .eq("user_id", user.id);
-
-      if (profileError) {
-        return { error: profileError as Error };
+      if (!data.success) {
+        return { error: new Error(data.error || 'NIN verification failed') };
       }
 
+      // Update local profile state with verification result
       if (profile) {
         setProfile({
           ...profile,
-          kyc_status: "verified",
-          kyc_verified_at: new Date().toISOString(),
+          kyc_status: data.status,
+          kyc_verified_at: data.verifiedAt,
         });
       }
 
