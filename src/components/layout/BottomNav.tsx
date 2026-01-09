@@ -1,4 +1,4 @@
-import { Home, Wallet, Settings, BarChart3, Zap } from "lucide-react";
+import { Home, Wallet, Settings, BarChart3 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -9,7 +9,6 @@ interface BottomNavProps {
 
 const navItems = [
   { id: "home", icon: Home, label: "Home" },
-  { id: "topup", icon: Zap, label: "Top-Up" },
   { id: "wallet", icon: Wallet, label: "Wallet" },
   { id: "analytics", icon: BarChart3, label: "Insights" },
   { id: "settings", icon: Settings, label: "Settings" },

@@ -2,7 +2,6 @@ import { motion } from "framer-motion";
 import { Bell, User } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
-import { AutoTopUpStatus } from "@/components/dashboard/AutoTopUpStatus";
 import { UsageOverview } from "@/components/dashboard/UsageOverview";
 import { BudgetCard } from "@/components/dashboard/BudgetCard";
 import { useWallet } from "@/contexts/WalletContext";
@@ -14,20 +13,11 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onNavigate }: HomeViewProps) {
-  const { wallet, autoTopUpRules, toggleAutoTopUpRule, transactions } = useWallet();
+  const { wallet, transactions } = useWallet();
   const { profile } = useAuth();
   const { greeting } = useGreeting();
 
   const displayName = profile?.full_name?.split(" ")[0] || "User";
-
-  // Map auto top-up rules to display format
-  const displayRules = autoTopUpRules.map((rule) => ({
-    id: rule.id,
-    type: rule.type as "data" | "airtime",
-    threshold: rule.type === "data" ? `${rule.threshold_percentage}%` : `${rule.threshold_percentage}%`,
-    amount: rule.topup_amount,
-    enabled: rule.is_enabled,
-  }));
 
   // Calculate usage stats from transactions
   const monthlyTransactions = transactions.filter((tx) => {
@@ -44,18 +34,12 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     .filter((tx) => tx.type === "airtime_purchase")
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const autoTopUps = monthlyTransactions.filter((tx) => tx.type === "auto_topup").length;
-
   const usageData = [
     { label: "Data Spent", current: dataSpent, previous: 0, unit: "₦", color: "text-accent" },
     { label: "Airtime Spent", current: airtimeSpent, previous: 0, unit: "₦", color: "text-primary" },
-    { label: "Auto Top-Ups", current: autoTopUps, previous: 0, unit: "", color: "text-foreground" },
     { label: "Total Deposits", current: monthlyTransactions.filter(tx => tx.type === "deposit").reduce((sum, tx) => sum + tx.amount, 0), previous: 0, unit: "₦", color: "text-primary" },
+    { label: "Transactions", current: monthlyTransactions.length, previous: 0, unit: "", color: "text-foreground" },
   ];
-
-  const handleToggleRule = (id: string) => {
-    toggleAutoTopUpRule(id);
-  };
 
   return (
     <div className="min-h-screen gradient-hero pb-24">
@@ -91,20 +75,12 @@ export function HomeView({ onNavigate }: HomeViewProps) {
 
         <QuickActions
           onAction={(action) => {
-            if (action === "autotopup") {
-              onNavigate("topup");
-            } else if (action === "history") {
+            if (action === "history") {
               onNavigate("analytics");
             } else if (action === "airtime" || action === "data") {
               onNavigate(action);
             }
           }}
-        />
-
-        <AutoTopUpStatus
-          rules={displayRules}
-          onToggle={handleToggleRule}
-          onViewAll={() => onNavigate("topup")}
         />
 
         <UsageOverview data={usageData} />
