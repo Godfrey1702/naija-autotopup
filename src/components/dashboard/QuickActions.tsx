@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Smartphone, Wifi, Zap, Receipt } from "lucide-react";
+import { Smartphone, Wifi, Receipt } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 interface QuickActionsProps {
@@ -9,7 +9,6 @@ interface QuickActionsProps {
 const actions = [
   { id: "airtime", icon: Smartphone, label: "Airtime", color: "text-primary" },
   { id: "data", icon: Wifi, label: "Data", color: "text-accent" },
-  { id: "autotopup", icon: Zap, label: "Auto Top-Up", color: "text-primary" },
   { id: "history", icon: Receipt, label: "History", color: "text-muted-foreground" },
 ];
 
