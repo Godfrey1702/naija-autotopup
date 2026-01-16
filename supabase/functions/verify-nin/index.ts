@@ -112,12 +112,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create Supabase client with user's JWT to get user info
+    // Create Supabase client with user's JWT for token validation
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    // User client for authentication
+    // User client for JWT validation
     const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -125,11 +125,14 @@ Deno.serve(async (req) => {
     // Service role client for secure database operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify user is authenticated
+    // Validate user authentication using getUser for secure verification
+    // getUser fetches the full user from the server and validates the JWT
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+    
     if (authError || !user) {
+      console.error('[verify-nin] Authentication failed:', authError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Invalid or expired token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

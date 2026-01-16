@@ -82,33 +82,40 @@ serve(async (req) => {
       });
     }
 
-    // Purchase data
+    // Purchase data - SECURED with JWT validation
     if (req.method === 'POST' && action === 'purchase') {
       const authHeader = req.headers.get('Authorization');
-      if (!authHeader) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!,
-        { global: { headers: { Authorization: authHeader } } }
-      );
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
 
+      // Validate user authentication using getUser for secure verification
       const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
       if (userError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        console.error('[payflex-data-topup] Authentication failed:', userError);
+        return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      // User is now authenticated - proceed with purchase
+      const userId = user.id;
 
       const { phoneNumber, planId, network, amount } = await req.json();
 
-      console.log(`[payflex-data-topup] Processing purchase for user: ${user.id}, phone: ${phoneNumber}, plan: ${planId}`);
+      console.log(`[payflex-data-topup] Processing purchase for user: ${userId}, phone: ${phoneNumber}, plan: ${planId}`);
 
       // Call Payflex API to purchase data
       const purchaseResponse = await fetch(`${PAYFLEX_BASE_URL}/data/purchase`, {
