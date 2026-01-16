@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.payflex-data-topup]
 verify_jwt = false
+
+[functions.payflex-airtime-topup]
+verify_jwt = false
+
+[functions.verify-nin]
+verify_jwt = false
