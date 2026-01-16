@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { PAYMENT_LIMITS, validateTopUp, formatCurrency } from "@/lib/constants";
+import { validateNigerianPhoneNumber, validatePurchaseAmount, parseApiError } from "@/lib/validation";
 
 interface Wallet {
   id: string;
@@ -47,7 +48,7 @@ interface WalletContextType {
   loading: boolean;
   refreshWallet: () => Promise<void>;
   fundWallet: (amount: number, reference?: string) => Promise<{ error: Error | null }>;
-  purchaseAirtimeOrData: (type: "airtime" | "data", amount: number, phoneNumber: string, phoneNumberId: string | null) => Promise<{ error: Error | null }>;
+  purchaseAirtimeOrData: (type: "airtime" | "data", amount: number, phoneNumber: string, phoneNumberId: string | null, network?: string, planId?: string) => Promise<{ error: Error | null; transactionId?: string }>;
   createAutoTopUpRule: (type: "data" | "airtime", threshold: number, amount: number, phoneNumberId?: string | null) => Promise<{ error: Error | null }>;
   updateAutoTopUpRule: (id: string, updates: Partial<AutoTopUpRule>) => Promise<{ error: Error | null }>;
   deleteAutoTopUpRule: (id: string) => Promise<{ error: Error | null }>;
@@ -238,58 +239,178 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     type: "airtime" | "data",
     amount: number,
     phoneNumber: string,
-    phoneNumberId: string | null
-  ) => {
-    if (!user || !wallet) return { error: new Error("No wallet available") };
-    if (wallet.balance < amount) return { error: new Error("Insufficient balance") };
+    phoneNumberId: string | null,
+    network?: string,
+    planId?: string
+  ): Promise<{ error: Error | null; transactionId?: string }> => {
+    // Validation: Check wallet exists
+    if (!user || !wallet) {
+      const error = new Error("No wallet available");
+      toast({
+        title: "Error",
+        description: "Wallet not found. Please refresh and try again.",
+        variant: "destructive",
+      });
+      return { error };
+    }
+
+    // Validation: Phone number
+    const phoneValidation = validateNigerianPhoneNumber(phoneNumber);
+    if (!phoneValidation.valid) {
+      const error = new Error(phoneValidation.error || "Invalid phone number");
+      toast({
+        title: "Invalid Phone Number",
+        description: phoneValidation.error,
+        variant: "destructive",
+      });
+      return { error };
+    }
+
+    // Validation: Amount
+    const amountValidation = validatePurchaseAmount(amount, wallet.balance, type);
+    if (!amountValidation.valid) {
+      const error = new Error(amountValidation.error || "Invalid amount");
+      toast({
+        title: "Invalid Amount",
+        description: amountValidation.error,
+        variant: "destructive",
+      });
+      return { error };
+    }
 
     const balanceBefore = wallet.balance;
     const balanceAfter = balanceBefore - amount;
-    const txReference = `${type.toUpperCase()}-${Date.now()}`;
+    const txReference = `${type.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const txType = type === "airtime" ? "airtime_purchase" : "data_purchase";
+    const cleanedPhone = phoneValidation.cleanedNumber;
+    const detectedNetwork = network || phoneValidation.detectedNetwork || "MTN";
 
-    // Create transaction
-    const { error: txError } = await supabase.from("transactions").insert({
+    // Create transaction with pending status first
+    const { data: txData, error: txError } = await supabase.from("transactions").insert({
       wallet_id: wallet.id,
       user_id: user.id,
       type: txType,
       amount,
       balance_before: balanceBefore,
       balance_after: balanceAfter,
-      status: "completed",
+      status: "pending",
       reference: txReference,
-      description: `${type === "airtime" ? "Airtime" : "Data"} purchase for ${phoneNumber}`,
-      metadata: { phone_number: phoneNumber, phone_number_id: phoneNumberId },
-    });
+      description: `${type === "airtime" ? "Airtime" : "Data"} purchase for ${cleanedPhone}`,
+      metadata: { 
+        phone_number: cleanedPhone, 
+        phone_number_id: phoneNumberId,
+        network: detectedNetwork,
+        plan_id: planId,
+        initiated_at: new Date().toISOString(),
+      },
+    }).select().single();
 
     if (txError) {
       console.error("Error creating transaction:", txError);
       toast({
-        title: "Purchase Failed",
-        description: "Could not complete the purchase. Please try again.",
+        title: "Transaction Failed",
+        description: "Could not initiate the purchase. Please try again.",
         variant: "destructive",
       });
       return { error: txError };
     }
 
-    // Update wallet balance
-    const { error: walletError } = await supabase
-      .from("wallets")
-      .update({ balance: balanceAfter })
-      .eq("id", wallet.id);
+    try {
+      // Get session for auth header
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Session expired. Please log in again.");
+      }
 
-    if (walletError) {
-      console.error("Error updating wallet:", walletError);
-      return { error: walletError };
+      // Call the appropriate edge function
+      const functionName = type === "airtime" ? "payflex-airtime-topup" : "payflex-data-topup";
+      const { data: purchaseResult, error: functionError } = await supabase.functions.invoke(
+        functionName,
+        {
+          body: {
+            phoneNumber: cleanedPhone,
+            amount,
+            network: detectedNetwork.toLowerCase(),
+            planId,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      if (functionError) {
+        throw functionError;
+      }
+
+      if (!purchaseResult?.success) {
+        throw new Error(purchaseResult?.error || "Purchase failed");
+      }
+
+      // Update transaction to completed
+      const existingMetadata = typeof txData.metadata === 'object' && txData.metadata !== null 
+        ? txData.metadata as Record<string, unknown>
+        : {};
+      await supabase
+        .from("transactions")
+        .update({ 
+          status: "completed",
+          metadata: {
+            ...existingMetadata,
+            completed_at: new Date().toISOString(),
+            external_reference: purchaseResult.reference,
+            external_transaction_id: purchaseResult.transactionId,
+          },
+        })
+        .eq("id", txData.id);
+
+      // Update wallet balance
+      const { error: walletError } = await supabase
+        .from("wallets")
+        .update({ balance: balanceAfter })
+        .eq("id", wallet.id);
+
+      if (walletError) {
+        console.error("Error updating wallet:", walletError);
+        // Transaction completed but wallet update failed - log for reconciliation
+      }
+
+      await refreshWallet();
+      toast({
+        title: "Purchase Successful! 🎉",
+        description: `${formatCurrency(amount)} ${type} sent to ${cleanedPhone}`,
+      });
+
+      return { error: null, transactionId: txData.id };
+
+    } catch (error) {
+      console.error("Purchase error:", error);
+      
+      // Update transaction to failed
+      const failedMetadata = typeof txData.metadata === 'object' && txData.metadata !== null 
+        ? txData.metadata as Record<string, unknown>
+        : {};
+      await supabase
+        .from("transactions")
+        .update({ 
+          status: "failed",
+          metadata: {
+            ...failedMetadata,
+            failed_at: new Date().toISOString(),
+            failure_reason: error instanceof Error ? error.message : "Unknown error",
+          },
+        })
+        .eq("id", txData.id);
+
+      const parsedError = parseApiError(error);
+      toast({
+        title: "Purchase Failed",
+        description: parsedError.message,
+        variant: "destructive",
+      });
+
+      return { error: error instanceof Error ? error : new Error(parsedError.message) };
     }
-
-    await refreshWallet();
-    toast({
-      title: "Purchase Successful",
-      description: `₦${amount.toLocaleString()} ${type} sent to ${phoneNumber}`,
-    });
-
-    return { error: null };
   };
 
   const createAutoTopUpRule = async (type: "data" | "airtime", threshold: number, amount: number, phoneNumberId?: string | null) => {
