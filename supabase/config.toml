@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.verify-nin]
 verify_jwt = false
+
+[functions.spending-analytics]
+verify_jwt = false
