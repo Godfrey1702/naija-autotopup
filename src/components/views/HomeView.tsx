@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
-import { Bell, User } from "lucide-react";
+import { User } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { UsageOverview } from "@/components/dashboard/UsageOverview";
 import { BudgetCard } from "@/components/dashboard/BudgetCard";
+import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useWallet } from "@/contexts/WalletContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGreeting } from "@/hooks/useGreeting";
@@ -55,10 +56,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center relative">
-              <Bell className="w-5 h-5 text-foreground" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
-            </button>
+            <NotificationDropdown />
             <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
               <User className="w-5 h-5 text-foreground" />
             </button>
