@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Smartphone, Wifi, Receipt } from "lucide-react";
+import { Smartphone, Globe, Receipt } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 interface QuickActionsProps {
@@ -7,9 +7,9 @@ interface QuickActionsProps {
 }
 
 const actions = [
-  { id: "airtime", icon: Smartphone, label: "Airtime", color: "text-primary" },
-  { id: "data", icon: Wifi, label: "Data", color: "text-accent" },
-  { id: "history", icon: Receipt, label: "History", color: "text-muted-foreground" },
+  { id: "airtime", icon: Smartphone, label: "Airtime", bgColor: "bg-primary/20", iconColor: "text-primary" },
+  { id: "data", icon: Globe, label: "Data", bgColor: "bg-accent/20", iconColor: "text-accent" },
+  { id: "history", icon: Receipt, label: "History", bgColor: "bg-secondary", iconColor: "text-foreground" },
 ];
 
 const container = {
@@ -33,7 +33,7 @@ export function QuickActions({ onAction }: QuickActionsProps) {
       variants={container}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-4 gap-3"
+      className="grid grid-cols-3 gap-3"
     >
       {actions.map((action) => (
         <motion.div key={action.id} variants={item}>
@@ -42,8 +42,8 @@ export function QuickActions({ onAction }: QuickActionsProps) {
             className="p-4 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:shadow-glow transition-all duration-300"
             onClick={() => onAction(action.id)}
           >
-            <div className={`w-10 h-10 rounded-xl bg-secondary flex items-center justify-center mb-2 ${action.color}`}>
-              <action.icon className="w-5 h-5" />
+            <div className={`w-10 h-10 rounded-xl ${action.bgColor} flex items-center justify-center mb-2`}>
+              <action.icon className={`w-5 h-5 ${action.iconColor}`} />
             </div>
             <span className="text-xs font-medium text-foreground">{action.label}</span>
           </Card>
