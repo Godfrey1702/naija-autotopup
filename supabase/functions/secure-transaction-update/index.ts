@@ -18,6 +18,33 @@ interface WalletFundRequest {
   reference?: string;
 }
 
+// Helper function to create notifications
+async function createNotification(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  notification: {
+    title: string;
+    message: string;
+    type: "success" | "error" | "warning" | "info";
+    category: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  try {
+    await adminClient.from("notifications").insert({
+      user_id: userId,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      category: notification.category,
+      metadata: notification.metadata || {},
+    });
+    console.log(`[notification] Created: ${notification.title}`);
+  } catch (error) {
+    console.error("[notification] Failed to create:", error);
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -155,8 +182,31 @@ Deno.serve(async (req) => {
 
         if (walletError) {
           console.error("[secure-transaction-update] Wallet update error:", walletError);
-          // Transaction updated but wallet failed - log for reconciliation
         }
+      }
+
+      // Create notification for transaction status change
+      const txType = transaction.type === "airtime_purchase" ? "Airtime" : 
+                     transaction.type === "data_purchase" ? "Data" : 
+                     transaction.type === "deposit" ? "Deposit" : "Transaction";
+      const amount = Number(transaction.amount);
+
+      if (status === "completed") {
+        await createNotification(adminClient, user.id, {
+          title: `${txType} Successful`,
+          message: `Your ${txType.toLowerCase()} purchase of ₦${amount.toLocaleString()} was successful.`,
+          type: "success",
+          category: "transaction",
+          metadata: { transactionId, type: transaction.type, amount },
+        });
+      } else if (status === "failed") {
+        await createNotification(adminClient, user.id, {
+          title: `${txType} Failed`,
+          message: `Your ${txType.toLowerCase()} purchase of ₦${amount.toLocaleString()} failed. Your wallet has been refunded.`,
+          type: "error",
+          category: "transaction",
+          metadata: { transactionId, type: transaction.type, amount },
+        });
       }
 
       return new Response(
@@ -261,6 +311,15 @@ Deno.serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      // Create success notification for wallet funding
+      await createNotification(adminClient, user.id, {
+        title: "Wallet Funded",
+        message: `₦${amount.toLocaleString()} has been added to your wallet. New balance: ₦${newBalance.toLocaleString()}`,
+        type: "success",
+        category: "transaction",
+        metadata: { transactionId: txData.id, amount, newBalance },
+      });
 
       return new Response(
         JSON.stringify({ 
