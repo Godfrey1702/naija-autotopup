@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.spending-analytics]
 verify_jwt = false
+
+[functions.secure-transaction-update]
+verify_jwt = false

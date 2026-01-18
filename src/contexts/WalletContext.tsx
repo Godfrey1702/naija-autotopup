@@ -167,7 +167,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const fundWallet = async (amount: number, reference?: string) => {
     if (!user || !wallet) return { error: new Error("No wallet available") };
 
-    // Validate payment limits
+    // Validate payment limits (client-side validation for UX)
     const validation = validateTopUp(amount, wallet.balance);
     if (!validation.valid) {
       toast({
@@ -178,61 +178,61 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       return { error: new Error(validation.error) };
     }
 
-    const balanceBefore = wallet.balance;
-    const balanceAfter = balanceBefore + amount;
-    const txReference = reference || `DEP-${Date.now()}`;
+    try {
+      // Get session for auth header
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Session expired. Please log in again.");
+      }
 
-    // Create transaction
-    const { error: txError } = await supabase.from("transactions").insert({
-      wallet_id: wallet.id,
-      user_id: user.id,
-      type: "deposit",
-      amount,
-      balance_before: balanceBefore,
-      balance_after: balanceAfter,
-      status: "completed",
-      reference: txReference,
-      description: "Wallet Funded",
-    });
+      // Use secure edge function for wallet funding
+      const { data: result, error: functionError } = await supabase.functions.invoke(
+        "secure-transaction-update/fund-wallet",
+        {
+          body: { amount, reference },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
-    if (txError) {
-      console.error("Error creating transaction:", txError);
-      // Check if it's the balance constraint error
-      if (txError.message?.includes("wallet_balance_max")) {
+      if (functionError) {
+        throw functionError;
+      }
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Failed to fund wallet");
+      }
+
+      await refreshWallet();
+      toast({
+        title: "Wallet Funded",
+        description: `${formatCurrency(amount)} has been added to your wallet.`,
+      });
+
+      return { error: null };
+
+    } catch (error) {
+      console.error("Error funding wallet:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to fund wallet";
+      
+      // Check for balance limit error
+      if (errorMessage.includes("Maximum wallet balance")) {
         toast({
           title: "Balance Limit Exceeded",
-          description: `Maximum wallet balance is ${formatCurrency(PAYMENT_LIMITS.MAX_WALLET_BALANCE)}`,
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Funding Failed",
+          description: errorMessage,
           variant: "destructive",
         });
       }
-      return { error: txError };
+
+      return { error: error instanceof Error ? error : new Error(errorMessage) };
     }
-
-    // Update wallet balance
-    const { error: walletError } = await supabase
-      .from("wallets")
-      .update({ balance: balanceAfter })
-      .eq("id", wallet.id);
-
-    if (walletError) {
-      console.error("Error updating wallet:", walletError);
-      if (walletError.message?.includes("wallet_balance_max")) {
-        toast({
-          title: "Balance Limit Exceeded",
-          description: `Maximum wallet balance is ${formatCurrency(PAYMENT_LIMITS.MAX_WALLET_BALANCE)}`,
-          variant: "destructive",
-        });
-      }
-      return { error: walletError };
-    }
-
-    await refreshWallet();
-    toast({
-      title: "Wallet Funded",
-      description: `${formatCurrency(amount)} has been added to your wallet.`,
-    });
-
-    return { error: null };
   };
 
   const purchaseAirtimeOrData = async (
@@ -347,32 +347,29 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(purchaseResult?.error || "Purchase failed");
       }
 
-      // Update transaction to completed
-      const existingMetadata = typeof txData.metadata === 'object' && txData.metadata !== null 
-        ? txData.metadata as Record<string, unknown>
-        : {};
-      await supabase
-        .from("transactions")
-        .update({ 
-          status: "completed",
-          metadata: {
-            ...existingMetadata,
-            completed_at: new Date().toISOString(),
-            external_reference: purchaseResult.reference,
-            external_transaction_id: purchaseResult.transactionId,
+      // Use secure edge function to update transaction status and wallet
+      const { data: updateResult, error: updateError } = await supabase.functions.invoke(
+        "secure-transaction-update/update-status",
+        {
+          body: {
+            transactionId: txData.id,
+            status: "completed",
+            metadata: {
+              external_reference: purchaseResult.reference,
+              external_transaction_id: purchaseResult.transactionId,
+            },
+            updateWalletBalance: true,
+            balanceAfter,
           },
-        })
-        .eq("id", txData.id);
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
-      // Update wallet balance
-      const { error: walletError } = await supabase
-        .from("wallets")
-        .update({ balance: balanceAfter })
-        .eq("id", wallet.id);
-
-      if (walletError) {
-        console.error("Error updating wallet:", walletError);
-        // Transaction completed but wallet update failed - log for reconciliation
+      if (updateError || !updateResult?.success) {
+        console.error("Error updating transaction:", updateError || updateResult?.error);
+        // Transaction may have completed but status update failed - log for reconciliation
       }
 
       await refreshWallet();
@@ -386,21 +383,29 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Purchase error:", error);
       
-      // Update transaction to failed
-      const failedMetadata = typeof txData.metadata === 'object' && txData.metadata !== null 
-        ? txData.metadata as Record<string, unknown>
-        : {};
-      await supabase
-        .from("transactions")
-        .update({ 
-          status: "failed",
-          metadata: {
-            ...failedMetadata,
-            failed_at: new Date().toISOString(),
-            failure_reason: error instanceof Error ? error.message : "Unknown error",
-          },
-        })
-        .eq("id", txData.id);
+      // Use secure edge function to mark transaction as failed
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await supabase.functions.invoke(
+            "secure-transaction-update/update-status",
+            {
+              body: {
+                transactionId: txData.id,
+                status: "failed",
+                metadata: {
+                  failure_reason: error instanceof Error ? error.message : "Unknown error",
+                },
+              },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            }
+          );
+        }
+      } catch (updateErr) {
+        console.error("Failed to update transaction status:", updateErr);
+      }
 
       const parsedError = parseApiError(error);
       toast({
