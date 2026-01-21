@@ -9,6 +9,7 @@ import { MonthlyTrendChart } from "@/components/analytics/MonthlyTrendChart";
 import { NetworkBreakdown } from "@/components/analytics/NetworkBreakdown";
 import { AnalyticsFilters } from "@/components/analytics/AnalyticsFilters";
 import { AnalyticsEmptyState } from "@/components/analytics/AnalyticsEmptyState";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface AnalyticsViewProps {
   onBack: () => void;
@@ -43,9 +44,10 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+              aria-label="Go back to previous page"
+              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              <ChevronLeft className="w-5 h-5 text-foreground" />
+              <ChevronLeft className="w-5 h-5 text-foreground" aria-hidden="true" />
             </button>
             <div>
               <h1 className="text-xl font-bold text-foreground">Spending Analytics</h1>
@@ -57,8 +59,12 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
             size="sm"
             onClick={() => refetch()}
             disabled={isLoading}
+            aria-label={isLoading ? "Loading data" : "Refresh analytics data"}
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw 
+              className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} 
+              aria-hidden="true" 
+            />
           </Button>
         </div>
       </motion.header>
@@ -83,17 +89,14 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-4 rounded-lg bg-destructive/10 border border-destructive/20"
           >
-            <p className="text-sm text-destructive">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              className="mt-2"
-            >
-              Try Again
-            </Button>
+            <ErrorState
+              type="generic"
+              title="Failed to load analytics"
+              message={error}
+              onRetry={() => refetch()}
+              retryLabel="Try Again"
+            />
           </motion.div>
         )}
 

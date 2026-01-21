@@ -44,28 +44,37 @@ export function HomeView({ onNavigate }: HomeViewProps) {
 
   return (
     <div className="min-h-screen gradient-hero pb-24">
+      {/* Skip to main content for accessibility */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="sticky top-0 z-40 glass border-b border-border/50 px-5 py-4"
+        role="banner"
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">{greeting}</p>
+            <p className="text-sm text-muted-foreground" aria-live="polite">{greeting}</p>
             <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
           </div>
           <div className="flex items-center gap-2">
             <NotificationDropdown />
-            <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-              <User className="w-5 h-5 text-foreground" />
+            <button 
+              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              aria-label="View profile"
+            >
+              <User className="w-5 h-5 text-foreground" aria-hidden="true" />
             </button>
           </div>
         </div>
       </motion.header>
 
       {/* Content */}
-      <div className="px-5 py-6 space-y-6">
+      <main id="main-content" className="px-5 py-6 space-y-6" role="main">
         <WalletCard
           balance={wallet?.balance || 0}
           onAddFunds={() => onNavigate("wallet")}
@@ -88,7 +97,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           spent={6850}
           onManage={() => onNavigate("settings")}
         />
-      </div>
+      </main>
     </div>
   );
 }
