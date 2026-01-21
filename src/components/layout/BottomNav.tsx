@@ -1,5 +1,4 @@
 import { Home, Wallet, Settings, BarChart3 } from "lucide-react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface BottomNavProps {
@@ -39,10 +38,8 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               )}
             >
               {isActive && (
-                <motion.div
-                  layoutId="activeTab"
+                <div
                   className="absolute inset-0 bg-primary/10 rounded-xl"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   aria-hidden="true"
                 />
               )}
