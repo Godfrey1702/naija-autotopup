@@ -19,8 +19,9 @@ interface WalletFundRequest {
 }
 
 // Helper function to create notifications
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createNotification(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: any,
   userId: string,
   notification: {
     title: string;
