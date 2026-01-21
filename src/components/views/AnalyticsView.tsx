@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { ChevronLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSpendingAnalytics, DateRangeFilter } from "@/hooks/useSpendingAnalytics";
@@ -35,11 +34,7 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
   return (
     <div className="min-h-screen gradient-hero pb-24">
       {/* Header */}
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-40 glass border-b border-border/50 px-5 py-4"
-      >
+      <header className="sticky top-0 z-40 glass border-b border-border/50 px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -62,34 +57,28 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
             aria-label={isLoading ? "Loading data" : "Refresh analytics data"}
           >
             <RefreshCw 
-              className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} 
+              className="w-4 h-4" 
               aria-hidden="true" 
             />
           </Button>
         </div>
-      </motion.header>
+      </header>
 
       {/* Content */}
       <div className="px-5 py-6 space-y-6">
         {/* Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <div>
           <AnalyticsFilters
             dateRange={dateRange}
             onDateRangeChange={setDateRange}
             network={network}
             onNetworkChange={setNetwork}
           />
-        </motion.div>
+        </div>
 
         {/* Error State */}
         {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <div>
             <ErrorState
               type="generic"
               title="Failed to load analytics"
@@ -97,26 +86,19 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
               onRetry={() => refetch()}
               retryLabel="Try Again"
             />
-          </motion.div>
+          </div>
         )}
 
         {/* Empty State */}
         {!isLoading && !error && !hasData && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <div>
             <AnalyticsEmptyState onAction={onBack} />
-          </motion.div>
+          </div>
         )}
 
         {/* Summary Cards */}
         {(isLoading || hasData) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-2 gap-3"
-          >
+          <div className="grid grid-cols-2 gap-3">
             <AnalyticsSummaryCard
               title="This Month"
               value={formatCurrency(analytics?.totalSpendThisMonth || 0)}
@@ -140,65 +122,48 @@ export function AnalyticsView({ onBack }: AnalyticsViewProps) {
               isLoading={isLoading}
               accentColor="accent"
             />
-          </motion.div>
+          </div>
         )}
 
         {/* Pie Chart */}
         {(isLoading || hasData) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
+          <div>
             <SpendingPieChart
               airtimeSpend={analytics?.airtimeSpend || 0}
               dataSpend={analytics?.dataSpend || 0}
               isLoading={isLoading}
             />
-          </motion.div>
+          </div>
         )}
 
         {/* Monthly Trend */}
         {(isLoading || hasData) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-          >
+          <div>
             <MonthlyTrendChart
               data={analytics?.monthlyTrend || []}
               isLoading={isLoading}
             />
-          </motion.div>
+          </div>
         )}
 
         {/* Network Breakdown */}
         {(isLoading || hasData) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+          <div>
             <NetworkBreakdown
               spendByNetwork={analytics?.spendByNetwork || {}}
               isLoading={isLoading}
             />
-          </motion.div>
+          </div>
         )}
 
         {/* Transaction Count */}
         {hasData && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="text-center text-xs text-muted-foreground"
-          >
+          <div className="text-center text-xs text-muted-foreground">
             Based on {analytics.transactionCount} transaction{analytics.transactionCount !== 1 ? 's' : ''}
             {analytics.lastUpdated && (
               <> • Updated {new Date(analytics.lastUpdated).toLocaleTimeString()}</>
             )}
-          </motion.div>
+          </div>
         )}
       </div>
     </div>

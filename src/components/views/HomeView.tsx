@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { User } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
@@ -50,9 +49,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       </a>
 
       {/* Header */}
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <header
         className="sticky top-0 z-40 glass border-b border-border/50 px-5 py-4"
         role="banner"
       >
@@ -71,7 +68,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             </button>
           </div>
         </div>
-      </motion.header>
+      </header>
 
       {/* Content */}
       <main id="main-content" className="px-5 py-6 space-y-6" role="main">

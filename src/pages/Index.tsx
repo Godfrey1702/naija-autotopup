@@ -103,17 +103,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.2 }}
-        >
-          {renderView()}
-        </motion.div>
-      </AnimatePresence>
+      {renderView()}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );

@@ -5,22 +5,22 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "gradient-primary text-primary-foreground shadow-glow hover:shadow-elevated hover:brightness-110",
+          "gradient-primary text-primary-foreground shadow-glow",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-sm",
         outline:
-          "border border-border bg-transparent text-foreground hover:bg-secondary hover:border-primary/50",
+          "border border-border bg-transparent text-foreground",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "text-foreground hover:bg-secondary hover:text-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-        gold: "gradient-gold text-accent-foreground shadow-card hover:shadow-elevated hover:brightness-110",
-        glass: "glass border border-border/50 text-foreground hover:bg-card/90",
+          "bg-secondary text-secondary-foreground shadow-sm",
+        ghost: "text-foreground",
+        link: "text-primary underline-offset-4",
+        gold: "gradient-gold text-accent-foreground shadow-card",
+        glass: "glass border border-border/50 text-foreground",
       },
       size: {
         default: "h-11 px-6 py-2",
