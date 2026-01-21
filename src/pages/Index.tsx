@@ -11,7 +11,7 @@ import { WalletView } from "@/components/views/WalletView";
 import { AnalyticsView } from "@/components/views/AnalyticsView";
 import { SettingsView } from "@/components/views/SettingsView";
 import { ManualPurchaseView } from "@/components/views/ManualPurchaseView";
-import { Loader2 } from "lucide-react";
+import { FullPageLoading } from "@/components/ui/loading-spinner";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("home");
@@ -45,14 +45,7 @@ const Index = () => {
   }, [user, profile, isKYCVerified]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-primary animate-spin" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <FullPageLoading message="Loading your dashboard..." />;
   }
 
   if (!user) {

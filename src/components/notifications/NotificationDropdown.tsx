@@ -149,11 +149,17 @@ export function NotificationDropdown() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+        aria-expanded={isOpen}
+        aria-haspopup="true"
+        aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+        className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <Bell className="w-5 h-5 text-foreground" />
+        <Bell className="w-5 h-5 text-foreground" aria-hidden="true" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full text-[10px] font-bold flex items-center justify-center text-primary-foreground">
+          <span 
+            className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full text-[10px] font-bold flex items-center justify-center text-primary-foreground"
+            aria-hidden="true"
+          >
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -193,14 +199,23 @@ export function NotificationDropdown() {
               </div>
 
               {/* Notifications List */}
-              <ScrollArea className="max-h-[400px]">
+              <ScrollArea className="max-h-[400px]" role="list" aria-label="Notifications list">
                 {loading ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    Loading...
+                  <div 
+                    className="p-8 text-center text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" aria-hidden="true" />
+                    <span>Loading notifications...</span>
                   </div>
                 ) : notifications.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <div 
+                    className="p-8 text-center text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" aria-hidden="true" />
                     <p>No notifications yet</p>
                   </div>
                 ) : (
