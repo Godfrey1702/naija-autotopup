@@ -2,7 +2,7 @@ import { User } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { UsageOverview } from "@/components/dashboard/UsageOverview";
-import { BudgetCard } from "@/components/dashboard/BudgetCard";
+import { BudgetProgressCard } from "@/components/dashboard/BudgetProgressCard";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useWallet } from "@/contexts/WalletContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -89,11 +89,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
 
         <UsageOverview data={usageData} />
 
-        <BudgetCard
-          totalBudget={10000}
-          spent={6850}
-          onManage={() => onNavigate("settings")}
-        />
+        <BudgetProgressCard onManage={() => onNavigate("settings")} />
       </main>
     </div>
   );
