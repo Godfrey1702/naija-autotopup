@@ -18,6 +18,16 @@ interface WalletFundRequest {
   reference?: string;
 }
 
+// Budget alert thresholds
+const BUDGET_THRESHOLDS = [50, 75, 90, 100];
+
+function getCurrentMonthYear(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
 // Helper function to create notifications
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createNotification(
@@ -43,6 +53,118 @@ async function createNotification(
     console.log(`[notification] Created: ${notification.title}`);
   } catch (error) {
     console.error("[notification] Failed to create:", error);
+  }
+}
+
+// Helper function to record spending event and update budget
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recordSpendingAndUpdateBudget(
+  adminClient: any,
+  userId: string,
+  transactionId: string,
+  transactionType: string,
+  amount: number
+) {
+  const currentMonth = getCurrentMonthYear();
+  const category = transactionType === "airtime_purchase" ? "AIRTIME" : "DATA";
+
+  console.log(`[budget] Recording spending: ${category} - ₦${amount} for user ${userId}`);
+
+  try {
+    // 1. Record immutable spending event
+    const { error: spendingError } = await adminClient
+      .from("spending_events")
+      .insert({
+        user_id: userId,
+        transaction_id: transactionId,
+        category,
+        amount,
+      });
+
+    if (spendingError) {
+      console.error("[budget] Failed to record spending event:", spendingError);
+      return;
+    }
+
+    // 2. Get or create user's monthly budget
+    const { data: budget, error: budgetFetchError } = await adminClient
+      .from("user_budgets")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("month_year", currentMonth)
+      .maybeSingle();
+
+    if (budgetFetchError) {
+      console.error("[budget] Failed to fetch budget:", budgetFetchError);
+      return;
+    }
+
+    // If no budget set, just log and return (user hasn't set a budget)
+    if (!budget) {
+      console.log(`[budget] No budget set for user ${userId} in ${currentMonth}`);
+      return;
+    }
+
+    // 3. Update amount_spent atomically
+    const newAmountSpent = Number(budget.amount_spent) + amount;
+    const budgetAmount = Number(budget.budget_amount);
+    
+    const { error: updateError } = await adminClient
+      .from("user_budgets")
+      .update({ 
+        amount_spent: newAmountSpent,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", budget.id);
+
+    if (updateError) {
+      console.error("[budget] Failed to update budget:", updateError);
+      return;
+    }
+
+    console.log(`[budget] Updated spent: ₦${newAmountSpent} / ₦${budgetAmount}`);
+
+    // 4. Check if we need to send threshold notifications
+    if (budgetAmount <= 0) return;
+
+    const percentageUsed = Math.round((newAmountSpent / budgetAmount) * 100);
+    const lastAlertLevel = budget.last_alert_level || 0;
+
+    // Find the next threshold that should trigger an alert
+    for (const threshold of BUDGET_THRESHOLDS) {
+      if (percentageUsed >= threshold && lastAlertLevel < threshold) {
+        // Send notification for this threshold
+        const isOverBudget = threshold >= 100;
+        const remaining = Math.max(0, budgetAmount - newAmountSpent);
+
+        await createNotification(adminClient, userId, {
+          title: isOverBudget ? "Monthly Budget Exceeded" : `${threshold}% Budget Used`,
+          message: isOverBudget 
+            ? `You've exceeded your monthly budget of ₦${budgetAmount.toLocaleString()}. You've spent ₦${newAmountSpent.toLocaleString()}.`
+            : `You've used ${threshold}% of your monthly budget. ₦${remaining.toLocaleString()} remaining.`,
+          type: isOverBudget ? "warning" : "info",
+          category: "budget",
+          metadata: { 
+            threshold, 
+            budgetAmount, 
+            amountSpent: newAmountSpent,
+            percentageUsed,
+            remaining
+          },
+        });
+
+        // Update last alert level
+        await adminClient
+          .from("user_budgets")
+          .update({ last_alert_level: threshold })
+          .eq("id", budget.id);
+
+        console.log(`[budget] Sent ${threshold}% threshold notification`);
+        break; // Only send one notification at a time
+      }
+    }
+  } catch (error) {
+    console.error("[budget] Error in recordSpendingAndUpdateBudget:", error);
   }
 }
 
@@ -184,6 +306,17 @@ Deno.serve(async (req) => {
         if (walletError) {
           console.error("[secure-transaction-update] Wallet update error:", walletError);
         }
+      }
+
+      // Record spending and update budget for completed airtime/data purchases
+      if (status === "completed" && (transaction.type === "airtime_purchase" || transaction.type === "data_purchase")) {
+        await recordSpendingAndUpdateBudget(
+          adminClient,
+          user.id,
+          transactionId,
+          transaction.type,
+          Number(transaction.amount)
+        );
       }
 
       // Create notification for transaction status change

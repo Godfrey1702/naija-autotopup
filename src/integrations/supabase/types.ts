@@ -166,6 +166,41 @@ export type Database = {
         }
         Relationships: []
       }
+      spending_events: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          id: string
+          transaction_id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          id?: string
+          transaction_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          id?: string
+          transaction_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spending_events_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           amount: number
@@ -221,6 +256,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_budgets: {
+        Row: {
+          amount_spent: number
+          budget_amount: number
+          created_at: string
+          id: string
+          last_alert_level: number
+          month_year: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_spent?: number
+          budget_amount?: number
+          created_at?: string
+          id?: string
+          last_alert_level?: number
+          month_year: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_spent?: number
+          budget_amount?: number
+          created_at?: string
+          id?: string
+          last_alert_level?: number
+          month_year?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_kyc: {
         Row: {

@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -25,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { PhoneNumberManagement } from "@/components/settings/PhoneNumberManagement";
+import { BudgetSettings } from "@/components/settings/BudgetSettings";
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -54,7 +54,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const [notifications, setNotifications] = useState(true);
   const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
-  const [monthlyBudget, setMonthlyBudget] = useState("10000");
 
   // Get user data from auth context
   const displayName = profile?.full_name || "User";
@@ -89,7 +88,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
     {
       title: "Preferences",
       items: [
-        { icon: Target, label: "Monthly Budget", value: `₦${Number(monthlyBudget).toLocaleString()}`, action: true, dialog: true },
+        { icon: Target, label: "Monthly Budget", value: "Manage", action: true, budgetDialog: true },
         { icon: Bell, label: "Notifications", toggle: true, value: notifications },
       ],
     },
@@ -179,10 +178,10 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             <Card variant="gradient" className="divide-y divide-border">
               {group.items.map((item) => (
                 <div key={item.label}>
-                  {item.dialog ? (
+                  {(item as any).budgetDialog ? (
                     <Dialog open={budgetDialogOpen} onOpenChange={setBudgetDialogOpen}>
                       <DialogTrigger asChild>
-                        <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50 transition-colors">
+                        <button className="w-full flex items-center justify-between p-4 hover:bg-secondary/50">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
                               <item.icon className="w-5 h-5 text-foreground" />
@@ -195,29 +194,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                           </div>
                         </button>
                       </DialogTrigger>
-                      <DialogContent className="bg-card border-border">
+                      <DialogContent className="bg-card border-border max-w-md max-h-[85vh] overflow-y-auto">
                         <DialogHeader>
-                          <DialogTitle>Set Monthly Budget</DialogTitle>
+                          <DialogTitle>Monthly Budget</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div>
-                            <label className="text-sm font-medium text-foreground mb-2 block">
-                              Monthly Budget (₦)
-                            </label>
-                            <Input
-                              type="number"
-                              value={monthlyBudget}
-                              onChange={(e) => setMonthlyBudget(e.target.value)}
-                              className="h-14 text-lg"
-                            />
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            You'll be notified when you're approaching your budget limit.
-                          </p>
-                          <Button onClick={() => setBudgetDialogOpen(false)} className="w-full">
-                            Save Budget
-                          </Button>
-                        </div>
+                        <BudgetSettings />
                       </DialogContent>
                     </Dialog>
                   ) : item.phoneDialog ? (
