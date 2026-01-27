@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-
+import { clearAllAuthData } from "@/lib/sessionOnlyStorage";
 /**
  * SECURITY NOTE: NIN (National Identity Number) is NOT stored in profiles table.
  * NIN is stored in a separate `user_kyc` table with restricted RLS policies:
@@ -124,7 +124,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    // Clear all auth data to ensure complete logout
+    clearAllAuthData();
     setProfile(null);
+    setUser(null);
+    setSession(null);
   };
 
   const updateProfile = async (data: Partial<Profile>) => {
