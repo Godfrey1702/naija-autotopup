@@ -1,39 +1,104 @@
 /**
- * SECURE AIRTIME TOP-UP EDGE FUNCTION
+ * PAYFLEX AIRTIME TOP-UP EDGE FUNCTION
+ * =====================================
  * 
- * This edge function handles airtime purchases securely:
- * 1. Validates JWT token using getClaims() for secure authentication
- * 2. Verifies user authorization before processing purchases
- * 3. Links all transactions to authenticated user accounts
- * 4. Provides audit trail for compliance
+ * This edge function handles airtime purchases through the Payflex VTU API.
+ * It provides both plan retrieval and secure purchase functionality.
  * 
- * SECURITY MEASURES:
- * - JWT validation using getClaims() instead of getUser()
- * - Authorization header validation
- * - User ID extracted from validated claims
- * - All purchases linked to authenticated users
+ * ## Endpoints
+ * 
+ * ### GET /payflex-airtime-topup?action=plans&network=mtn
+ * Retrieves available airtime plans with pricing (includes 5% margin).
+ * 
+ * **Query Parameters:**
+ * - `action`: Must be "plans"
+ * - `network`: Network provider (mtn, airtel, glo, 9mobile)
+ * 
+ * **Response:**
+ * ```json
+ * {
+ *   "success": true,
+ *   "plans": [
+ *     { "id": "airtime-100", "amount": 100, "finalPrice": 105, "bonus": "0%", "network": "MTN" }
+ *   ]
+ * }
+ * ```
+ * 
+ * ### POST /payflex-airtime-topup?action=purchase
+ * Processes an airtime purchase (requires authentication).
+ * 
+ * **Request Body:**
+ * ```json
+ * {
+ *   "phoneNumber": "08012345678",
+ *   "amount": 500,
+ *   "network": "mtn"
+ * }
+ * ```
+ * 
+ * **Response:**
+ * ```json
+ * {
+ *   "success": true,
+ *   "transactionId": "TXN123",
+ *   "reference": "REF456",
+ *   "userId": "user-uuid",
+ *   "message": "Airtime purchase successful"
+ * }
+ * ```
+ * 
+ * ## Security
+ * - Plan retrieval is public (no auth required)
+ * - Purchases require valid JWT authentication
+ * - User ID is logged for audit trail
+ * - Phone number validation (Nigerian format)
+ * - Amount validation (₦50 - ₦50,000)
+ * 
+ * ## Pricing
+ * All prices include a 5% margin over Payflex base cost.
+ * 
+ * @module payflex-airtime-topup
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/**
+ * CORS headers for cross-origin requests.
+ */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Payflex API key from environment */
 const PAYFLEX_API_KEY = Deno.env.get('PAYFLEX_API_KEY');
-const PAYFLEX_BASE_URL = 'https://api.payflexng.com/v1';
-const MARGIN_PERCENTAGE = 0.05; // 5% margin
 
+/** Payflex API base URL */
+const PAYFLEX_BASE_URL = 'https://api.payflexng.com/v1';
+
+/** Margin percentage added to Payflex base prices (5%) */
+const MARGIN_PERCENTAGE = 0.05;
+
+/**
+ * Structure for an airtime plan with pricing.
+ */
 interface AirtimePlan {
+  /** Unique plan identifier */
   id: string;
+  /** Base airtime amount in NGN */
   amount: number;
+  /** Final price including margin */
   finalPrice: number;
+  /** Bonus percentage (e.g., "5%") */
   bonus: string;
+  /** Network provider in uppercase */
   network: string;
 }
 
+/**
+ * Main request handler for the payflex-airtime-topup edge function.
+ */
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -44,13 +109,15 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
 
-    // Get airtime plans with pricing
+    // =========================================================================
+    // GET ?action=plans - Retrieve airtime plans (public endpoint)
+    // =========================================================================
     if (req.method === 'GET' && action === 'plans') {
       const network = url.searchParams.get('network') || 'mtn';
       
       console.log(`[payflex-airtime-topup] Fetching plans for network: ${network}`);
       
-      // Return predefined airtime amounts with margin
+      // Return predefined airtime amounts with margin applied
       const plans = getAirtimePlans(network);
       
       return new Response(JSON.stringify({ 
@@ -61,8 +128,11 @@ serve(async (req) => {
       });
     }
 
-    // Purchase airtime - SECURED with JWT validation
+    // =========================================================================
+    // POST ?action=purchase - Process airtime purchase (authenticated)
+    // =========================================================================
     if (req.method === 'POST' && action === 'purchase') {
+      // Validate authorization header
       const authHeader = req.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
         console.error('[payflex-airtime-topup] Missing or invalid authorization header');
@@ -72,6 +142,7 @@ serve(async (req) => {
         });
       }
 
+      // Create Supabase client and verify user
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
       
@@ -79,8 +150,7 @@ serve(async (req) => {
         global: { headers: { Authorization: authHeader } },
       });
 
-      // Validate user authentication using getUser for secure verification
-      // getUser fetches the full user from the server and validates the JWT
+      // Validate JWT by fetching user from server
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
@@ -91,13 +161,13 @@ serve(async (req) => {
         });
       }
 
-      // User is now authenticated - extract user details
       const userId = user.id;
       const userEmail = user.email;
 
+      // Parse request body
       const { phoneNumber, amount, network } = await req.json();
 
-      // Validate input
+      // Validate required fields
       if (!phoneNumber || !amount || !network) {
         return new Response(JSON.stringify({ error: 'Missing required fields: phoneNumber, amount, network' }), {
           status: 400,
@@ -105,7 +175,8 @@ serve(async (req) => {
         });
       }
 
-      // Validate phone number format (Nigerian format)
+      // Validate Nigerian phone number format
+      // Accepts: 0701XXXXXXX, 0801XXXXXXX, or 234XXXXXXXXXX
       const cleanPhone = phoneNumber.replace(/\D/g, '');
       if (!/^(0[7-9][0-1]\d{8}|234[7-9][0-1]\d{8})$/.test(cleanPhone)) {
         return new Response(JSON.stringify({ error: 'Invalid Nigerian phone number format' }), {
@@ -114,7 +185,7 @@ serve(async (req) => {
         });
       }
 
-      // Validate amount (minimum ₦50, maximum ₦50,000)
+      // Validate amount range
       const purchaseAmount = Number(amount);
       if (isNaN(purchaseAmount) || purchaseAmount < 50 || purchaseAmount > 50000) {
         return new Response(JSON.stringify({ error: 'Amount must be between ₦50 and ₦50,000' }), {
@@ -125,7 +196,7 @@ serve(async (req) => {
 
       console.log(`[payflex-airtime-topup] Processing purchase for user: ${userId}, phone: ${phoneNumber}, amount: ${amount}`);
 
-      // Call Payflex API to purchase airtime
+      // Call Payflex API to process the airtime purchase
       const purchaseResponse = await fetch(`${PAYFLEX_BASE_URL}/airtime/purchase`, {
         method: 'POST',
         headers: {
@@ -159,7 +230,7 @@ serve(async (req) => {
         success: true,
         transactionId: purchaseData.transaction_id,
         reference: purchaseData.reference,
-        userId: userId, // Include user ID for audit trail
+        userId: userId, // Include for audit trail
         message: 'Airtime purchase successful'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -181,7 +252,17 @@ serve(async (req) => {
   }
 });
 
-// Predefined airtime amounts with bonuses and margin
+/**
+ * Generates predefined airtime plans with pricing and bonuses.
+ * All prices include a 5% margin over base cost.
+ * 
+ * @param network - Network provider name (e.g., "mtn", "airtel")
+ * @returns Array of airtime plans with pricing
+ * 
+ * @example
+ * const plans = getAirtimePlans("mtn");
+ * // Returns: [{ id: "airtime-100", amount: 100, finalPrice: 105, ... }]
+ */
 function getAirtimePlans(network: string): AirtimePlan[] {
   const basePlans = [
     { id: 'airtime-100', amount: 100, bonus: '0%' },

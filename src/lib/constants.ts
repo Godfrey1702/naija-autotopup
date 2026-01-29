@@ -1,32 +1,103 @@
-// Payment limits for compliance
+/**
+ * @fileoverview Application Constants
+ * 
+ * This module defines all application constants including payment limits,
+ * pricing margins, network providers, and data plan definitions.
+ * 
+ * ## Payment Limits
+ * - Minimum top-up: ₦5,000
+ * - Maximum wallet balance: ₦8,000,000
+ * - Minimum purchase: ₦100
+ * 
+ * ## Pricing
+ * All prices include a 5% margin over base cost from the VTU provider.
+ * 
+ * ## Network Providers
+ * Supports all major Nigerian networks: MTN, Airtel, Glo, 9mobile
+ * 
+ * @module constants
+ */
+
+/**
+ * Payment limits for compliance and business rules.
+ * These limits are enforced both client-side (for UX) and server-side (for security).
+ * 
+ * @constant
+ */
 export const PAYMENT_LIMITS = {
-  MIN_TOPUP_AMOUNT: 5000, // ₦5,000 minimum top-up
-  MAX_WALLET_BALANCE: 8000000, // ₦8,000,000 maximum balance
-  MIN_PURCHASE_AMOUNT: 100, // ₦100 minimum for airtime/data
+  /** Minimum wallet top-up amount in NGN */
+  MIN_TOPUP_AMOUNT: 5000,
+  /** Maximum wallet balance allowed in NGN */
+  MAX_WALLET_BALANCE: 8000000,
+  /** Minimum purchase amount for airtime/data in NGN */
+  MIN_PURCHASE_AMOUNT: 100,
 } as const;
 
-// Pricing margin for data plans (5%)
+/**
+ * Pricing margin applied to all VTU purchases.
+ * This margin covers operational costs and provides revenue.
+ * 
+ * @constant
+ */
 export const PRICING_MARGIN = 0.05;
 
-// Calculate final price with margin
+/**
+ * Calculates the final price with margin applied.
+ * 
+ * @param {number} costPrice - Base cost from VTU provider
+ * @returns {number} Final price rounded up to nearest naira
+ * 
+ * @example
+ * const finalPrice = calculatePriceWithMargin(1000);
+ * console.log(finalPrice); // 1050
+ */
 export const calculatePriceWithMargin = (costPrice: number): number => {
   return Math.ceil(costPrice * (1 + PRICING_MARGIN));
 };
 
-// Nigerian mobile network providers
+/**
+ * List of supported Nigerian mobile network providers.
+ * 
+ * @constant
+ */
 export const NETWORK_PROVIDERS = ['MTN', 'Airtel', 'Glo', '9mobile'] as const;
+
+/**
+ * Type definition for network providers.
+ */
 export type NetworkProvider = typeof NETWORK_PROVIDERS[number];
 
-// Format currency for display
+/**
+ * Formats a number as Nigerian Naira currency.
+ * 
+ * @param {number} amount - Amount in NGN
+ * @returns {string} Formatted currency string (e.g., "₦10,000")
+ * 
+ * @example
+ * formatCurrency(10000); // "₦10,000"
+ */
 export const formatCurrency = (amount: number): string => {
   return `₦${amount.toLocaleString("en-NG")}`;
 };
 
-// Validate top-up amount against limits
+/**
+ * Validates a top-up amount against payment limits.
+ * 
+ * @param {number} amount - Amount to top up
+ * @param {number} currentBalance - Current wallet balance
+ * @returns {{ valid: boolean; error?: string }} Validation result
+ * 
+ * @example
+ * const result = validateTopUp(5000, 7000000);
+ * if (!result.valid) {
+ *   console.error(result.error);
+ * }
+ */
 export const validateTopUp = (
   amount: number,
   currentBalance: number
 ): { valid: boolean; error?: string } => {
+  // Check minimum amount
   if (amount < PAYMENT_LIMITS.MIN_TOPUP_AMOUNT) {
     return {
       valid: false,
@@ -34,6 +105,7 @@ export const validateTopUp = (
     };
   }
 
+  // Check if resulting balance would exceed maximum
   const newBalance = currentBalance + amount;
   if (newBalance > PAYMENT_LIMITS.MAX_WALLET_BALANCE) {
     const maxAllowed = PAYMENT_LIMITS.MAX_WALLET_BALANCE - currentBalance;
@@ -52,14 +124,28 @@ export const validateTopUp = (
   return { valid: true };
 };
 
-// Airtime plans with 5% margin applied
+/**
+ * Airtime plan structure with pricing.
+ * 
+ * @interface AirtimePlan
+ */
 export interface AirtimePlan {
+  /** Unique plan identifier */
   id: string;
+  /** Base airtime amount in NGN */
   amount: number;
+  /** Final price with margin */
   finalPrice: number;
+  /** Cashback percentage (optional) */
   cashback?: number;
 }
 
+/**
+ * Predefined airtime plans with 5% margin applied.
+ * Higher amounts offer cashback incentives.
+ * 
+ * @constant
+ */
 export const AIRTIME_PLANS: AirtimePlan[] = [
   { id: 'air-50', amount: 50, finalPrice: calculatePriceWithMargin(50) },
   { id: 'air-100', amount: 100, finalPrice: calculatePriceWithMargin(100) },
@@ -69,46 +155,70 @@ export const AIRTIME_PLANS: AirtimePlan[] = [
   { id: 'air-2000', amount: 2000, finalPrice: calculatePriceWithMargin(2000), cashback: 20 },
 ];
 
-// Data plan categories
+/**
+ * Data plan categories for organization.
+ * 
+ * @constant
+ */
 export const DATA_PLAN_CATEGORIES = ['HOT', 'Daily', 'Weekly', 'Monthly', 'Always-On'] as const;
+
+/**
+ * Type definition for data plan categories.
+ */
 export type DataPlanCategory = typeof DATA_PLAN_CATEGORIES[number];
 
-// Data plan structure
+/**
+ * Data plan structure with full pricing and details.
+ * 
+ * @interface DataPlan
+ */
 export interface DataPlan {
+  /** Unique plan identifier */
   id: string;
+  /** Data allocation (e.g., "1GB") */
   dataAmount: string;
+  /** Validity period (e.g., "30 days") */
   validity: string;
+  /** Base cost from provider in NGN */
   costPrice: number;
+  /** Final price with margin */
   finalPrice: number;
+  /** Plan category for filtering */
   category: DataPlanCategory;
+  /** Optional promotional tag */
   tag?: 'Best Seller' | 'Best Price' | 'Night Plan' | 'Popular';
 }
 
-// Data plans grouped by network
+/**
+ * Data plans organized by network provider.
+ * Each network has plans across all categories with 5% margin applied.
+ * 
+ * @constant
+ */
 export const DATA_PLANS: Record<NetworkProvider, DataPlan[]> = {
   MTN: [
-    // HOT deals
+    // HOT deals - promotional offers
     { id: 'mtn-hot-1', dataAmount: '1GB', validity: '1 Day', costPrice: 271, finalPrice: calculatePriceWithMargin(271), category: 'HOT', tag: 'Best Seller' },
     { id: 'mtn-hot-2', dataAmount: '2GB', validity: '2 Days', costPrice: 542, finalPrice: calculatePriceWithMargin(542), category: 'HOT', tag: 'Popular' },
     { id: 'mtn-hot-3', dataAmount: '3.5GB', validity: '7 Days', costPrice: 950, finalPrice: calculatePriceWithMargin(950), category: 'HOT', tag: 'Best Price' },
-    // Daily
+    // Daily plans
     { id: 'mtn-daily-1', dataAmount: '100MB', validity: '1 Day', costPrice: 95, finalPrice: calculatePriceWithMargin(95), category: 'Daily' },
     { id: 'mtn-daily-2', dataAmount: '200MB', validity: '1 Day', costPrice: 190, finalPrice: calculatePriceWithMargin(190), category: 'Daily' },
     { id: 'mtn-daily-3', dataAmount: '1GB', validity: '1 Day', costPrice: 285, finalPrice: calculatePriceWithMargin(285), category: 'Daily' },
     { id: 'mtn-daily-4', dataAmount: '2GB', validity: '1 Day', costPrice: 475, finalPrice: calculatePriceWithMargin(475), category: 'Daily' },
-    // Weekly
+    // Weekly plans
     { id: 'mtn-weekly-1', dataAmount: '750MB', validity: '7 Days', costPrice: 475, finalPrice: calculatePriceWithMargin(475), category: 'Weekly' },
     { id: 'mtn-weekly-2', dataAmount: '1.5GB', validity: '7 Days', costPrice: 950, finalPrice: calculatePriceWithMargin(950), category: 'Weekly' },
     { id: 'mtn-weekly-3', dataAmount: '3GB', validity: '7 Days', costPrice: 1425, finalPrice: calculatePriceWithMargin(1425), category: 'Weekly' },
     { id: 'mtn-weekly-4', dataAmount: '6GB', validity: '7 Days', costPrice: 2375, finalPrice: calculatePriceWithMargin(2375), category: 'Weekly', tag: 'Best Price' },
-    // Monthly
+    // Monthly plans
     { id: 'mtn-monthly-1', dataAmount: '1.5GB', validity: '30 Days', costPrice: 950, finalPrice: calculatePriceWithMargin(950), category: 'Monthly' },
     { id: 'mtn-monthly-2', dataAmount: '3GB', validity: '30 Days', costPrice: 1425, finalPrice: calculatePriceWithMargin(1425), category: 'Monthly' },
     { id: 'mtn-monthly-3', dataAmount: '6GB', validity: '30 Days', costPrice: 2375, finalPrice: calculatePriceWithMargin(2375), category: 'Monthly', tag: 'Popular' },
     { id: 'mtn-monthly-4', dataAmount: '10GB', validity: '30 Days', costPrice: 3325, finalPrice: calculatePriceWithMargin(3325), category: 'Monthly', tag: 'Best Seller' },
     { id: 'mtn-monthly-5', dataAmount: '25GB', validity: '30 Days', costPrice: 6175, finalPrice: calculatePriceWithMargin(6175), category: 'Monthly' },
     { id: 'mtn-monthly-6', dataAmount: '40GB', validity: '30 Days', costPrice: 9500, finalPrice: calculatePriceWithMargin(9500), category: 'Monthly' },
-    // Always-On
+    // Always-On / Night plans
     { id: 'mtn-always-1', dataAmount: '1GB', validity: 'Night', costPrice: 238, finalPrice: calculatePriceWithMargin(238), category: 'Always-On', tag: 'Night Plan' },
     { id: 'mtn-always-2', dataAmount: '2GB', validity: 'Night', costPrice: 475, finalPrice: calculatePriceWithMargin(475), category: 'Always-On', tag: 'Night Plan' },
   ],
@@ -172,7 +282,16 @@ export const DATA_PLANS: Record<NetworkProvider, DataPlan[]> = {
   ],
 };
 
-// Helper to get plans by category for a network
+/**
+ * Helper function to get data plans by category for a specific network.
+ * 
+ * @param {NetworkProvider} network - Network provider
+ * @param {DataPlanCategory} category - Plan category
+ * @returns {DataPlan[]} Filtered list of plans
+ * 
+ * @example
+ * const mtnMonthlyPlans = getDataPlansByCategory('MTN', 'Monthly');
+ */
 export const getDataPlansByCategory = (
   network: NetworkProvider,
   category: DataPlanCategory

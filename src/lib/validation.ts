@@ -1,7 +1,35 @@
+/**
+ * @fileoverview Validation Utilities
+ * 
+ * This module provides validation functions for Nigerian phone numbers,
+ * purchase amounts, and API error parsing. All validations follow Nigerian
+ * telecommunications standards.
+ * 
+ * ## Phone Number Validation
+ * - Validates 11-digit Nigerian phone numbers
+ * - Supports formats: 08012345678, 234XXXXXXXXXX, +234XXXXXXXXXX
+ * - Detects network provider from prefix
+ * 
+ * ## Amount Validation
+ * - Enforces minimum and maximum purchase limits
+ * - Checks against wallet balance
+ * 
+ * ## Error Handling
+ * - Parses API errors into user-friendly messages
+ * - Maps common error patterns to specific error codes
+ * 
+ * @module validation
+ */
+
 import { z } from 'zod';
 import { PAYMENT_LIMITS, formatCurrency } from './constants';
 
-// Nigerian phone number patterns
+/**
+ * Nigerian phone number prefixes organized by network provider.
+ * Each network has unique 4-digit prefixes that identify the carrier.
+ * 
+ * @constant
+ */
 const NIGERIAN_PHONE_PREFIXES: Record<string, readonly string[]> = {
   MTN: ['0703', '0706', '0803', '0806', '0810', '0813', '0814', '0816', '0903', '0906', '0913', '0916'],
   Airtel: ['0701', '0708', '0802', '0808', '0812', '0901', '0902', '0904', '0907', '0912'],
@@ -9,14 +37,33 @@ const NIGERIAN_PHONE_PREFIXES: Record<string, readonly string[]> = {
   '9mobile': ['0809', '0817', '0818', '0908', '0909'],
 } as const;
 
-// All valid Nigerian phone prefixes
+/** All valid Nigerian phone prefixes flattened */
 const ALL_NIGERIAN_PREFIXES = Object.values(NIGERIAN_PHONE_PREFIXES).flat();
 
+/**
+ * Type definition for Nigerian network providers.
+ */
 export type NigerianNetwork = 'MTN' | 'Airtel' | 'Glo' | '9mobile';
 
 /**
- * Validates a Nigerian phone number
- * @returns Object with validity status, cleaned number, detected network, and error message
+ * Validates a Nigerian phone number and detects the network provider.
+ * 
+ * Accepts multiple input formats:
+ * - Local format: 08012345678
+ * - International: 234XXXXXXXXXX
+ * - With plus: +234XXXXXXXXXX
+ * 
+ * @param {string} phoneNumber - Phone number to validate (any format)
+ * @returns {Object} Validation result with cleaned number and detected network
+ * 
+ * @example
+ * // Valid number
+ * const result = validateNigerianPhoneNumber("08031234567");
+ * // { valid: true, cleanedNumber: "08031234567", detectedNetwork: "MTN" }
+ * 
+ * // Invalid number
+ * const result = validateNigerianPhoneNumber("123");
+ * // { valid: false, cleanedNumber: "123", detectedNetwork: null, error: "..." }
  */
 export const validateNigerianPhoneNumber = (phoneNumber: string): {
   valid: boolean;
@@ -27,14 +74,14 @@ export const validateNigerianPhoneNumber = (phoneNumber: string): {
   // Remove all non-digit characters
   let cleaned = phoneNumber.replace(/\D/g, '');
   
-  // Handle different formats
+  // Normalize international format to local format
   if (cleaned.startsWith('234')) {
     cleaned = '0' + cleaned.slice(3);
   } else if (cleaned.startsWith('+234')) {
     cleaned = '0' + cleaned.slice(4);
   }
   
-  // Check length
+  // Validate length (Nigerian numbers are 11 digits in local format)
   if (cleaned.length !== 11) {
     return {
       valid: false,
@@ -44,7 +91,7 @@ export const validateNigerianPhoneNumber = (phoneNumber: string): {
     };
   }
   
-  // Check if starts with valid prefix
+  // Extract and validate prefix
   const prefix = cleaned.substring(0, 4);
   if (!ALL_NIGERIAN_PREFIXES.includes(prefix)) {
     return {
@@ -55,7 +102,7 @@ export const validateNigerianPhoneNumber = (phoneNumber: string): {
     };
   }
   
-  // Detect network
+  // Detect network from prefix
   let detectedNetwork: NigerianNetwork | null = null;
   for (const [network, prefixes] of Object.entries(NIGERIAN_PHONE_PREFIXES)) {
     if (prefixes.includes(prefix)) {
@@ -72,17 +119,37 @@ export const validateNigerianPhoneNumber = (phoneNumber: string): {
 };
 
 /**
- * Validates purchase amount
+ * Validates a purchase amount against limits and wallet balance.
+ * 
+ * Checks:
+ * - Amount is a positive number
+ * - Amount meets minimum requirement
+ * - Amount doesn't exceed maximum for purchase type
+ * - Sufficient wallet balance
+ * 
+ * @param {number} amount - Amount to validate
+ * @param {number} walletBalance - Current wallet balance
+ * @param {'airtime' | 'data'} type - Purchase type (affects max limit)
+ * @returns {{ valid: boolean; error?: string }} Validation result
+ * 
+ * @example
+ * const result = validatePurchaseAmount(500, 10000, 'airtime');
+ * // { valid: true }
+ * 
+ * const result = validatePurchaseAmount(100000, 10000, 'airtime');
+ * // { valid: false, error: "Insufficient balance..." }
  */
 export const validatePurchaseAmount = (
   amount: number,
   walletBalance: number,
   type: 'airtime' | 'data'
 ): { valid: boolean; error?: string } => {
+  // Check for valid number
   if (isNaN(amount) || amount <= 0) {
     return { valid: false, error: 'Please enter a valid amount' };
   }
   
+  // Check minimum amount
   if (amount < PAYMENT_LIMITS.MIN_PURCHASE_AMOUNT) {
     return {
       valid: false,
@@ -90,7 +157,7 @@ export const validatePurchaseAmount = (
     };
   }
   
-  // Max airtime purchase limit
+  // Check maximum amount (different for airtime vs data)
   const maxPurchase = type === 'airtime' ? 50000 : 100000;
   if (amount > maxPurchase) {
     return {
@@ -99,6 +166,7 @@ export const validatePurchaseAmount = (
     };
   }
   
+  // Check wallet balance
   if (amount > walletBalance) {
     return {
       valid: false,
@@ -109,7 +177,12 @@ export const validatePurchaseAmount = (
   return { valid: true };
 };
 
-// Zod schema for purchase validation
+/**
+ * Zod schema for purchase form validation.
+ * Provides declarative validation with type inference.
+ * 
+ * @constant
+ */
 export const purchaseSchema = z.object({
   phoneNumber: z
     .string()
@@ -126,10 +199,19 @@ export const purchaseSchema = z.object({
   network: z.string().min(1, 'Network is required'),
 });
 
+/**
+ * TypeScript type inferred from the purchase schema.
+ */
 export type PurchaseInput = z.infer<typeof purchaseSchema>;
 
 /**
- * Format phone number for display
+ * Formats a phone number for display with spaces.
+ * 
+ * @param {string} phone - Phone number (11 digits)
+ * @returns {string} Formatted phone number (e.g., "0803 123 4567")
+ * 
+ * @example
+ * formatPhoneNumber("08031234567"); // "0803 123 4567"
  */
 export const formatPhoneNumber = (phone: string): string => {
   const cleaned = phone.replace(/\D/g, '');
@@ -140,14 +222,25 @@ export const formatPhoneNumber = (phone: string): string => {
 };
 
 /**
- * Get network from phone number
+ * Gets the network provider from a phone number.
+ * Convenience wrapper around validateNigerianPhoneNumber.
+ * 
+ * @param {string} phone - Phone number to check
+ * @returns {NigerianNetwork | null} Network provider or null if invalid
+ * 
+ * @example
+ * getNetworkFromPhone("08031234567"); // "MTN"
  */
 export const getNetworkFromPhone = (phone: string): NigerianNetwork | null => {
   const { detectedNetwork } = validateNigerianPhoneNumber(phone);
   return detectedNetwork;
 };
 
-// Error codes and messages for user-friendly feedback
+/**
+ * Error code constants for standardized error handling.
+ * 
+ * @constant
+ */
 export const ERROR_CODES = {
   INVALID_PHONE: 'INVALID_PHONE',
   INVALID_AMOUNT: 'INVALID_AMOUNT',
@@ -158,6 +251,11 @@ export const ERROR_CODES = {
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 } as const;
 
+/**
+ * User-friendly error messages for each error code.
+ * 
+ * @constant
+ */
 export const ERROR_MESSAGES: Record<keyof typeof ERROR_CODES, string> = {
   INVALID_PHONE: 'Please enter a valid Nigerian phone number',
   INVALID_AMOUNT: 'Please enter a valid amount',
@@ -169,12 +267,26 @@ export const ERROR_MESSAGES: Record<keyof typeof ERROR_CODES, string> = {
 };
 
 /**
- * Parse API error response to user-friendly message
+ * Parses an API error into a user-friendly error code and message.
+ * Analyzes error message content to determine the appropriate error type.
+ * 
+ * @param {unknown} error - Error from API call
+ * @returns {{ code: string; message: string }} Parsed error with user-friendly message
+ * 
+ * @example
+ * try {
+ *   await purchaseAirtime();
+ * } catch (error) {
+ *   const { code, message } = parseApiError(error);
+ *   toast.error(message);
+ *   analytics.track('purchase_error', { code });
+ * }
  */
 export const parseApiError = (error: unknown): { code: keyof typeof ERROR_CODES; message: string } => {
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
     
+    // Pattern matching for specific error types
     if (message.includes('phone') || message.includes('number')) {
       return { code: 'INVALID_PHONE', message: ERROR_MESSAGES.INVALID_PHONE };
     }
@@ -189,5 +301,6 @@ export const parseApiError = (error: unknown): { code: keyof typeof ERROR_CODES;
     }
   }
   
+  // Default to unknown error
   return { code: 'UNKNOWN_ERROR', message: ERROR_MESSAGES.UNKNOWN_ERROR };
 };
