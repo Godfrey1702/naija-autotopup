@@ -1,25 +1,97 @@
+/**
+ * PAYFLEX DATA TOP-UP EDGE FUNCTION
+ * ==================================
+ * 
+ * This edge function handles data bundle purchases through the Payflex VTU API.
+ * It provides plan retrieval, purchase processing, and balance checking.
+ * 
+ * ## Endpoints
+ * 
+ * ### GET /payflex-data-topup?action=plans&network=mtn
+ * Retrieves available data plans with pricing (includes 5% margin).
+ * Falls back to predefined plans if Payflex API is unavailable.
+ * 
+ * **Response:**
+ * ```json
+ * {
+ *   "success": true,
+ *   "plans": [
+ *     { "id": "1gb", "name": "1GB", "costPrice": 300, "finalPrice": 315, "validity": "30 days", "dataAmount": "1GB", "network": "MTN" }
+ *   ],
+ *   "source": "payflex" | "fallback"
+ * }
+ * ```
+ * 
+ * ### POST /payflex-data-topup?action=purchase
+ * Processes a data purchase (requires authentication).
+ * 
+ * **Request Body:**
+ * ```json
+ * {
+ *   "phoneNumber": "08012345678",
+ *   "planId": "1gb",
+ *   "network": "mtn",
+ *   "amount": 315
+ * }
+ * ```
+ * 
+ * ### GET /payflex-data-topup?action=balance
+ * Checks the Payflex wallet balance (for monitoring).
+ * 
+ * ## Pricing
+ * All prices include a 5% margin over Payflex base cost.
+ * 
+ * ## Security
+ * - Plan retrieval and balance check are public
+ * - Purchases require valid JWT authentication
+ * - User ID is logged for audit trail
+ * 
+ * @module payflex-data-topup
+ */
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/**
+ * CORS headers for cross-origin requests.
+ */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Payflex API key from environment */
 const PAYFLEX_API_KEY = Deno.env.get('PAYFLEX_API_KEY');
-const PAYFLEX_BASE_URL = 'https://api.payflexng.com/v1';
-const MARGIN_PERCENTAGE = 0.05; // 5% margin
 
+/** Payflex API base URL */
+const PAYFLEX_BASE_URL = 'https://api.payflexng.com/v1';
+
+/** Margin percentage added to Payflex base prices (5%) */
+const MARGIN_PERCENTAGE = 0.05;
+
+/**
+ * Structure for a data plan with pricing.
+ */
 interface DataPlan {
+  /** Unique plan identifier */
   id: string;
+  /** Display name (e.g., "1GB") */
   name: string;
+  /** Base cost from Payflex in NGN */
   costPrice: number;
+  /** Final price including margin */
   finalPrice: number;
+  /** Network provider in uppercase */
   network: string;
+  /** Validity period (e.g., "30 days") */
   validity: string;
+  /** Data allocation (e.g., "1GB") */
   dataAmount: string;
 }
 
+/**
+ * Main request handler for the payflex-data-topup edge function.
+ */
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -30,13 +102,15 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
 
-    // Get data plans with pricing
+    // =========================================================================
+    // GET ?action=plans - Retrieve data plans (public endpoint)
+    // =========================================================================
     if (req.method === 'GET' && action === 'plans') {
       const network = url.searchParams.get('network') || 'mtn';
       
       console.log(`[payflex-data-topup] Fetching plans for network: ${network}`);
       
-      // Fetch plans from Payflex API
+      // Attempt to fetch plans from Payflex API
       const response = await fetch(`${PAYFLEX_BASE_URL}/data/plans?network=${network}`, {
         method: 'GET',
         headers: {
@@ -47,7 +121,7 @@ serve(async (req) => {
 
       if (!response.ok) {
         console.error(`[payflex-data-topup] Payflex API error: ${response.status}`);
-        // Return fallback plans if API fails
+        // Return fallback plans if Payflex API is unavailable
         const fallbackPlans = getFallbackPlans(network);
         return new Response(JSON.stringify({ 
           success: true, 
@@ -60,7 +134,7 @@ serve(async (req) => {
 
       const data = await response.json();
       
-      // Add margin to each plan
+      // Transform Payflex response and add margin to each plan
       const plansWithMargin = data.plans?.map((plan: any) => ({
         id: plan.id,
         name: plan.name,
@@ -82,8 +156,11 @@ serve(async (req) => {
       });
     }
 
-    // Purchase data - SECURED with JWT validation
+    // =========================================================================
+    // POST ?action=purchase - Process data purchase (authenticated)
+    // =========================================================================
     if (req.method === 'POST' && action === 'purchase') {
+      // Validate authorization header
       const authHeader = req.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
         return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
@@ -92,6 +169,7 @@ serve(async (req) => {
         });
       }
 
+      // Create Supabase client and verify user
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
       
@@ -99,7 +177,7 @@ serve(async (req) => {
         global: { headers: { Authorization: authHeader } },
       });
 
-      // Validate user authentication using getUser for secure verification
+      // Validate JWT by fetching user from server
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
@@ -110,14 +188,14 @@ serve(async (req) => {
         });
       }
 
-      // User is now authenticated - proceed with purchase
       const userId = user.id;
 
+      // Parse request body
       const { phoneNumber, planId, network, amount } = await req.json();
 
       console.log(`[payflex-data-topup] Processing purchase for user: ${userId}, phone: ${phoneNumber}, plan: ${planId}`);
 
-      // Call Payflex API to purchase data
+      // Call Payflex API to process the data purchase
       const purchaseResponse = await fetch(`${PAYFLEX_BASE_URL}/data/purchase`, {
         method: 'POST',
         headers: {
@@ -157,7 +235,9 @@ serve(async (req) => {
       });
     }
 
-    // Check balance
+    // =========================================================================
+    // GET ?action=balance - Check Payflex wallet balance
+    // =========================================================================
     if (req.method === 'GET' && action === 'balance') {
       const response = await fetch(`${PAYFLEX_BASE_URL}/wallet/balance`, {
         method: 'GET',
@@ -202,7 +282,16 @@ serve(async (req) => {
   }
 });
 
-// Fallback plans with 5% margin already applied
+/**
+ * Generates fallback data plans when Payflex API is unavailable.
+ * All prices include a 5% margin over base cost.
+ * 
+ * @param network - Network provider name
+ * @returns Array of fallback data plans
+ * 
+ * @example
+ * const plans = getFallbackPlans("mtn");
+ */
 function getFallbackPlans(network: string): DataPlan[] {
   const basePlans = [
     { id: '1gb', name: '1GB', costPrice: 300, dataAmount: '1GB', validity: '30 days' },
