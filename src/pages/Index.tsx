@@ -11,6 +11,7 @@ import { WalletView } from "@/components/views/WalletView";
 import { AnalyticsView } from "@/components/views/AnalyticsView";
 import { SettingsView } from "@/components/views/SettingsView";
 import { ManualPurchaseView } from "@/components/views/ManualPurchaseView";
+import { ScheduledTopUpsView } from "@/components/views/ScheduledTopUpsView";
 import { FullPageLoading } from "@/components/ui/loading-spinner";
 
 const Index = () => {
@@ -94,6 +95,8 @@ const Index = () => {
         return <AnalyticsView onBack={() => setActiveTab("home")} />;
       case "settings":
         return <SettingsView onBack={() => setActiveTab("home")} />;
+      case "schedules":
+        return <ScheduledTopUpsView onBack={() => setActiveTab("home")} />;
       case "purchase":
         return <ManualPurchaseView onBack={() => setActiveTab("home")} initialType={purchaseType} />;
       default:
