@@ -2,7 +2,7 @@
 
 **Project:** Data & Airtime Wallet + Spending Analytics Platform
 **Current Phase:** MVP
-**Core Feature:** Manual Top-Up + Spending Tracking (NO Auto-Top-Up)
+**Core Feature:** Manual Top-Up + Scheduled Top-Up + Spending Tracking
 
 ---
 
