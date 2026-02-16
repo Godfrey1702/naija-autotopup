@@ -153,7 +153,7 @@ function ScheduleCard({
 }) {
   const statusStyle = STATUS_STYLES[schedule.status] || STATUS_STYLES.active;
   const isActive = schedule.status === "active" || schedule.status === "paused";
-  const phoneLabel = schedule.phone_numbers?.label || schedule.phone_numbers?.phone_number || "Unknown";
+  const phoneLabel = schedule.phone_number || "Unknown";
 
   return (
     <Card className="p-4">
