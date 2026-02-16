@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useScheduledTopUps, CreateSchedulePayload } from "@/hooks/useScheduledTopUps";
-import { usePhoneNumbers } from "@/contexts/PhoneNumberContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { NETWORK_PROVIDERS } from "@/lib/constants";
+import { validateNigerianPhoneNumber, getNetworkFromPhone } from "@/lib/validation";
 
 interface CreateScheduleSheetProps {
   open: boolean;
@@ -17,12 +18,14 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 
 export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetProps) {
   const { createSchedule } = useScheduledTopUps();
-  const { phoneNumbers } = usePhoneNumbers();
+  const { profile } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
   const [type, setType] = useState<"airtime" | "data">("airtime");
   const [network, setNetwork] = useState("MTN");
   const [amount, setAmount] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [scheduleType, setScheduleType] = useState<"one_time" | "daily" | "weekly" | "monthly">("one_time");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
@@ -30,12 +33,56 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
   const [dayOfWeek, setDayOfWeek] = useState("1");
   const [dayOfMonth, setDayOfMonth] = useState("1");
   const [maxExecutions, setMaxExecutions] = useState("10");
-  const [phoneNumberId, setPhoneNumberId] = useState("");
+
+  // Prepopulate with user's registered phone number
+  useEffect(() => {
+    if (open && profile?.phone_number && !phoneNumber) {
+      setPhoneNumber(profile.phone_number);
+      const detected = getNetworkFromPhone(profile.phone_number);
+      if (detected) setNetwork(detected);
+    }
+  }, [open, profile?.phone_number]);
+
+  const validatePhone = (value: string) => {
+    if (!value.trim()) {
+      setPhoneError("Phone number is required");
+      return false;
+    }
+    const result = validateNigerianPhoneNumber(value);
+    if (!result.valid) {
+      setPhoneError(result.error || "Please enter a valid phone number");
+      return false;
+    }
+    setPhoneError("");
+    return true;
+  };
+
+  const handlePhoneChange = (value: string) => {
+    // Only allow digits, +, and spaces
+    const sanitized = value.replace(/[^\d+\s]/g, "");
+    setPhoneNumber(sanitized);
+
+    if (sanitized.length >= 4) {
+      const result = validateNigerianPhoneNumber(sanitized);
+      if (result.valid && result.detectedNetwork) {
+        setNetwork(result.detectedNetwork);
+      }
+      if (sanitized.replace(/\D/g, "").length >= 11) {
+        validatePhone(sanitized);
+      } else {
+        setPhoneError("");
+      }
+    } else {
+      setPhoneError("");
+    }
+  };
 
   const resetForm = () => {
     setType("airtime");
     setNetwork("MTN");
     setAmount("");
+    setPhoneNumber(profile?.phone_number || "");
+    setPhoneError("");
     setScheduleType("one_time");
     setScheduledDate("");
     setScheduledTime("");
@@ -43,13 +90,14 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
     setDayOfWeek("1");
     setDayOfMonth("1");
     setMaxExecutions("10");
-    setPhoneNumberId("");
   };
 
   const handleSubmit = async () => {
     const amountNum = Number(amount);
     if (!amountNum || amountNum <= 0) return;
-    if (!phoneNumberId) return;
+    if (!validatePhone(phoneNumber)) return;
+
+    const { cleanedNumber } = validateNigerianPhoneNumber(phoneNumber);
 
     setSubmitting(true);
 
@@ -58,7 +106,7 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
       network,
       amount: amountNum,
       schedule_type: scheduleType,
-      phone_number_id: phoneNumberId,
+      phone_number: cleanedNumber,
     };
 
     if (scheduleType === "one_time") {
@@ -99,16 +147,23 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
           {/* Phone Number */}
           <div className="space-y-2">
             <Label>Phone Number</Label>
-            <Select value={phoneNumberId} onValueChange={setPhoneNumberId}>
-              <SelectTrigger><SelectValue placeholder="Select phone number" /></SelectTrigger>
-              <SelectContent>
-                {phoneNumbers.map((pn) => (
-                  <SelectItem key={pn.id} value={pn.id}>
-                    {pn.label || pn.phone_number} ({pn.phone_number})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              type="tel"
+              placeholder="e.g. 08031234567"
+              value={phoneNumber}
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              onBlur={() => phoneNumber && validatePhone(phoneNumber)}
+              maxLength={15}
+              className={phoneError ? "border-destructive" : ""}
+            />
+            {phoneError && (
+              <p className="text-xs text-destructive">{phoneError}</p>
+            )}
+            {!phoneError && phoneNumber && validateNigerianPhoneNumber(phoneNumber).valid && (
+              <p className="text-xs text-muted-foreground">
+                Network: {getNetworkFromPhone(phoneNumber) || network}
+              </p>
+            )}
           </div>
 
           {/* Type */}
@@ -239,7 +294,7 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
 
           <Button
             onClick={handleSubmit}
-            disabled={submitting || !amount || !phoneNumberId}
+            disabled={submitting || !amount || !phoneNumber || !!phoneError}
             className="w-full"
             size="lg"
           >

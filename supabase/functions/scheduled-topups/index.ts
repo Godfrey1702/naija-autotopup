@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     if (req.method === 'GET') {
       const { data, error } = await adminClient
         .from('scheduled_topups')
-        .select('*, phone_numbers(phone_number, label, network_provider)')
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -126,11 +126,20 @@ Deno.serve(async (req) => {
     // =========================================================================
     if (req.method === 'POST') {
       const body = await req.json();
-      const { type, network, amount, plan_id, schedule_type, scheduled_at, recurring_time, recurring_day_of_week, recurring_day_of_month, max_executions, phone_number_id } = body;
+      const { type, network, amount, plan_id, schedule_type, scheduled_at, recurring_time, recurring_day_of_week, recurring_day_of_month, max_executions, phone_number } = body;
 
       // Validate required fields
-      if (!type || !network || !amount || !schedule_type) {
-        return new Response(JSON.stringify({ error: 'Missing required fields: type, network, amount, schedule_type' }), {
+      if (!type || !network || !amount || !schedule_type || !phone_number) {
+        return new Response(JSON.stringify({ error: 'Missing required fields: type, network, amount, schedule_type, phone_number' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Validate phone number format (Nigerian: 11 digits starting with 0)
+      const cleanedPhone = String(phone_number).replace(/\D/g, '');
+      if (cleanedPhone.length !== 11 || !cleanedPhone.startsWith('0')) {
+        console.error(`[scheduled-topups] Invalid phone number: ${phone_number}`);
+        return new Response(JSON.stringify({ error: 'Invalid phone number. Must be a valid 11-digit Nigerian number.' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -171,7 +180,7 @@ Deno.serve(async (req) => {
         .from('scheduled_topups')
         .insert({
           user_id: user.id,
-          phone_number_id: phone_number_id || null,
+          phone_number: cleanedPhone,
           type,
           network,
           amount,
@@ -185,7 +194,7 @@ Deno.serve(async (req) => {
           next_execution_at: nextExecution,
           status: 'active',
         })
-        .select('*, phone_numbers(phone_number, label, network_provider)')
+        .select('*')
         .single();
 
       if (error) {
@@ -241,7 +250,7 @@ Deno.serve(async (req) => {
       if (body.network !== undefined) updates.network = body.network;
       if (body.type !== undefined) updates.type = body.type;
       if (body.plan_id !== undefined) updates.plan_id = body.plan_id;
-      if (body.phone_number_id !== undefined) updates.phone_number_id = body.phone_number_id;
+      if (body.phone_number !== undefined) updates.phone_number = body.phone_number;
       if (body.max_executions !== undefined) updates.max_executions = body.max_executions;
       if (body.status !== undefined && ['active', 'paused', 'cancelled'].includes(body.status)) {
         updates.status = body.status;
@@ -269,7 +278,7 @@ Deno.serve(async (req) => {
         .update(updates)
         .eq('id', id)
         .eq('user_id', user.id)
-        .select('*, phone_numbers(phone_number, label, network_provider)')
+        .select('*')
         .single();
 
       if (error) {

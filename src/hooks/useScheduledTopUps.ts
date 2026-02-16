@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 export interface ScheduledTopUp {
   id: string;
   user_id: string;
+  phone_number: string | null;
   phone_number_id: string | null;
   type: "airtime" | "data";
   network: string;
@@ -22,11 +23,6 @@ export interface ScheduledTopUp {
   next_execution_at: string | null;
   created_at: string;
   updated_at: string;
-  phone_numbers?: {
-    phone_number: string;
-    label: string | null;
-    network_provider: string | null;
-  } | null;
 }
 
 export interface CreateSchedulePayload {
@@ -40,7 +36,7 @@ export interface CreateSchedulePayload {
   recurring_day_of_week?: number;
   recurring_day_of_month?: number;
   max_executions?: number;
-  phone_number_id?: string;
+  phone_number: string;
 }
 
 export function useScheduledTopUps() {

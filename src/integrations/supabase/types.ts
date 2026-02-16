@@ -222,6 +222,7 @@ export type Database = {
           max_executions: number | null
           network: string
           next_execution_at: string | null
+          phone_number: string | null
           phone_number_id: string | null
           plan_id: string | null
           recurring_day_of_month: number | null
@@ -242,6 +243,7 @@ export type Database = {
           max_executions?: number | null
           network: string
           next_execution_at?: string | null
+          phone_number?: string | null
           phone_number_id?: string | null
           plan_id?: string | null
           recurring_day_of_month?: number | null
@@ -262,6 +264,7 @@ export type Database = {
           max_executions?: number | null
           network?: string
           next_execution_at?: string | null
+          phone_number?: string | null
           phone_number_id?: string | null
           plan_id?: string | null
           recurring_day_of_month?: number | null

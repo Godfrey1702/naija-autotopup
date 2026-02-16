@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     // Fetch all due schedules
     const { data: dueSchedules, error: fetchError } = await adminClient
       .from('scheduled_topups')
-      .select('*, phone_numbers(phone_number)')
+      .select('*')
       .eq('status', 'active')
       .lte('next_execution_at', now)
       .order('next_execution_at', { ascending: true })
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
 
     for (const schedule of dueSchedules) {
       processed++;
-      const phoneNumber = schedule.phone_numbers?.phone_number;
+      const phoneNumber = schedule.phone_number;
 
       if (!phoneNumber) {
         console.error(`[execute-scheduled-topups] No phone number for schedule ${schedule.id}`);
