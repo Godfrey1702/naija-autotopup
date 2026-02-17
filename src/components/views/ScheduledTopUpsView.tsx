@@ -169,7 +169,10 @@ function ScheduleCard({
               <p className="font-semibold text-foreground">{formatCurrency(schedule.amount)}</p>
               <Badge variant={statusStyle.variant} className="text-[10px]">{statusStyle.label}</Badge>
             </div>
-            <p className="text-xs text-muted-foreground capitalize">{schedule.type} • {schedule.network}</p>
+            <p className="text-xs text-muted-foreground capitalize">
+              {schedule.type} • {schedule.network}
+              {schedule.plan_id && ` • ${schedule.plan_id}`}
+            </p>
             <p className="text-xs text-muted-foreground">{phoneLabel}</p>
           </div>
         </div>

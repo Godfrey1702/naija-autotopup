@@ -150,6 +150,13 @@ Deno.serve(async (req) => {
         });
       }
 
+      // For data type, plan_id is required
+      if (type === 'data' && !plan_id) {
+        return new Response(JSON.stringify({ error: 'plan_id is required for data top-ups. Please select a data package.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       if (!['one_time', 'daily', 'weekly', 'monthly'].includes(schedule_type)) {
         return new Response(JSON.stringify({ error: 'Invalid schedule_type' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
