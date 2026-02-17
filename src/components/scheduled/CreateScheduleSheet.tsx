@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useScheduledTopUps, CreateSchedulePayload } from "@/hooks/useScheduledTopUps";
 import { useAuth } from "@/contexts/AuthContext";
-import { NETWORK_PROVIDERS } from "@/lib/constants";
+import { NETWORK_PROVIDERS, DATA_PLANS, type DataPlan, type NetworkProvider } from "@/lib/constants";
 import { validateNigerianPhoneNumber, getNetworkFromPhone } from "@/lib/validation";
+import { TimePicker12h } from "./TimePicker12h";
+import { DataPlanPicker } from "./DataPlanPicker";
 
 interface CreateScheduleSheetProps {
   open: boolean;
@@ -24,15 +26,21 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
   const [type, setType] = useState<"airtime" | "data">("airtime");
   const [network, setNetwork] = useState("MTN");
   const [amount, setAmount] = useState("");
+  const [selectedDataPlan, setSelectedDataPlan] = useState<DataPlan | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [scheduleType, setScheduleType] = useState<"one_time" | "daily" | "weekly" | "monthly">("one_time");
   const [scheduledDate, setScheduledDate] = useState("");
-  const [scheduledTime, setScheduledTime] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("09:00");
   const [recurringTime, setRecurringTime] = useState("09:00");
   const [dayOfWeek, setDayOfWeek] = useState("1");
   const [dayOfMonth, setDayOfMonth] = useState("1");
   const [maxExecutions, setMaxExecutions] = useState("10");
+
+  // Reset data plan when network or type changes
+  useEffect(() => {
+    setSelectedDataPlan(null);
+  }, [network, type]);
 
   // Prepopulate with user's registered phone number
   useEffect(() => {
@@ -58,7 +66,6 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
   };
 
   const handlePhoneChange = (value: string) => {
-    // Only allow digits, +, and spaces
     const sanitized = value.replace(/[^\d+\s]/g, "");
     setPhoneNumber(sanitized);
 
@@ -81,39 +88,53 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
     setType("airtime");
     setNetwork("MTN");
     setAmount("");
+    setSelectedDataPlan(null);
     setPhoneNumber(profile?.phone_number || "");
     setPhoneError("");
     setScheduleType("one_time");
     setScheduledDate("");
-    setScheduledTime("");
+    setScheduledTime("09:00");
     setRecurringTime("09:00");
     setDayOfWeek("1");
     setDayOfMonth("1");
     setMaxExecutions("10");
   };
 
+  const isFormValid = () => {
+    if (!phoneNumber || !!phoneError) return false;
+    if (type === "airtime") {
+      if (!amount || Number(amount) <= 0) return false;
+    } else {
+      if (!selectedDataPlan) return false;
+    }
+    if (scheduleType === "one_time" && !scheduledDate) return false;
+    return true;
+  };
+
   const handleSubmit = async () => {
-    const amountNum = Number(amount);
-    if (!amountNum || amountNum <= 0) return;
     if (!validatePhone(phoneNumber)) return;
+    if (!isFormValid()) return;
 
     const { cleanedNumber } = validateNigerianPhoneNumber(phoneNumber);
 
     setSubmitting(true);
 
+    const effectiveAmount = type === "data" && selectedDataPlan ? selectedDataPlan.finalPrice : Number(amount);
+
     const payload: CreateSchedulePayload = {
       type,
       network,
-      amount: amountNum,
+      amount: effectiveAmount,
       schedule_type: scheduleType,
       phone_number: cleanedNumber,
     };
 
+    if (type === "data" && selectedDataPlan) {
+      payload.plan_id = selectedDataPlan.id;
+    }
+
     if (scheduleType === "one_time") {
-      if (!scheduledDate || !scheduledTime) {
-        setSubmitting(false);
-        return;
-      }
+      if (!scheduledDate) { setSubmitting(false); return; }
       payload.scheduled_at = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
     } else {
       payload.recurring_time = recurringTime;
@@ -170,20 +191,10 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
           <div className="space-y-2">
             <Label>Type</Label>
             <div className="flex gap-2">
-              <Button
-                variant={type === "airtime" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setType("airtime")}
-                className="flex-1"
-              >
+              <Button variant={type === "airtime" ? "default" : "outline"} size="sm" onClick={() => setType("airtime")} className="flex-1">
                 Airtime
               </Button>
-              <Button
-                variant={type === "data" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setType("data")}
-                className="flex-1"
-              >
+              <Button variant={type === "data" ? "default" : "outline"} size="sm" onClick={() => setType("data")} className="flex-1">
                 Data
               </Button>
             </div>
@@ -202,17 +213,19 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
             </Select>
           </div>
 
-          {/* Amount */}
-          <div className="space-y-2">
-            <Label>Amount (₦)</Label>
-            <Input
-              type="number"
-              placeholder="e.g. 1000"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              min={50}
+          {/* Amount (airtime) or Data Plan (data) */}
+          {type === "airtime" ? (
+            <div className="space-y-2">
+              <Label>Amount (₦)</Label>
+              <Input type="number" placeholder="e.g. 1000" value={amount} onChange={(e) => setAmount(e.target.value)} min={50} />
+            </div>
+          ) : (
+            <DataPlanPicker
+              network={network}
+              selectedPlanId={selectedDataPlan?.id || ""}
+              onSelect={setSelectedDataPlan}
             />
-          </div>
+          )}
 
           {/* Schedule Type */}
           <div className="space-y-2">
@@ -228,27 +241,21 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
             </Select>
           </div>
 
-          {/* One-time: Date & Time */}
+          {/* One-time: Date & Time with AM/PM */}
           {scheduleType === "one_time" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div className="space-y-2">
                 <Label>Date</Label>
                 <Input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
               </div>
-              <div className="space-y-2">
-                <Label>Time</Label>
-                <Input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
-              </div>
+              <TimePicker12h label="Time" value={scheduledTime} onChange={setScheduledTime} />
             </div>
           )}
 
-          {/* Recurring: Time */}
+          {/* Recurring: Time with AM/PM */}
           {scheduleType !== "one_time" && (
             <>
-              <div className="space-y-2">
-                <Label>Time of Day</Label>
-                <Input type="time" value={recurringTime} onChange={(e) => setRecurringTime(e.target.value)} />
-              </div>
+              <TimePicker12h label="Time of Day" value={recurringTime} onChange={setRecurringTime} />
 
               {scheduleType === "weekly" && (
                 <div className="space-y-2">
@@ -280,24 +287,13 @@ export function CreateScheduleSheet({ open, onOpenChange }: CreateScheduleSheetP
 
               <div className="space-y-2">
                 <Label>Max Executions</Label>
-                <Input
-                  type="number"
-                  value={maxExecutions}
-                  onChange={(e) => setMaxExecutions(e.target.value)}
-                  min={1}
-                  max={365}
-                />
+                <Input type="number" value={maxExecutions} onChange={(e) => setMaxExecutions(e.target.value)} min={1} max={365} />
                 <p className="text-xs text-muted-foreground">The schedule will stop after this many executions.</p>
               </div>
             </>
           )}
 
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || !amount || !phoneNumber || !!phoneError}
-            className="w-full"
-            size="lg"
-          >
+          <Button onClick={handleSubmit} disabled={submitting || !isFormValid()} className="w-full" size="lg">
             {submitting ? "Creating..." : "Create Schedule"}
           </Button>
         </div>
