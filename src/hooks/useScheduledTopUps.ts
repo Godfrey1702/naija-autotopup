@@ -39,6 +39,8 @@ export interface CreateSchedulePayload {
   phone_number: string;
 }
 
+const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scheduled-topups`;
+
 export function useScheduledTopUps() {
   const [schedules, setSchedules] = useState<ScheduledTopUp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,11 @@ export function useScheduledTopUps() {
   const getAuthHeaders = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("Session expired");
-    return { Authorization: `Bearer ${session.access_token}` };
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    };
   };
 
   const fetchSchedules = useCallback(async () => {
@@ -56,11 +62,9 @@ export function useScheduledTopUps() {
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const { data, error } = await supabase.functions.invoke("scheduled-topups", {
-        method: "GET",
-        headers,
-      });
-      if (error) throw error;
+      const res = await fetch(FUNCTIONS_BASE, { method: "GET", headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to fetch schedules");
       if (data?.success) {
         setSchedules(data.schedules.map((s: ScheduledTopUp) => ({
           ...s,
@@ -81,14 +85,15 @@ export function useScheduledTopUps() {
   const createSchedule = async (payload: CreateSchedulePayload) => {
     try {
       const headers = await getAuthHeaders();
-      const { data, error } = await supabase.functions.invoke("scheduled-topups", {
+      const res = await fetch(FUNCTIONS_BASE, {
         method: "POST",
         headers,
-        body: payload,
+        body: JSON.stringify(payload),
       });
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to create schedule");
       if (!data?.success) throw new Error(data?.error || "Failed to create schedule");
-      
+
       await fetchSchedules();
       toast({ title: "Schedule Created", description: `Your ${payload.type} top-up has been scheduled.` });
       return { error: null };
@@ -102,11 +107,12 @@ export function useScheduledTopUps() {
   const cancelSchedule = async (id: string) => {
     try {
       const headers = await getAuthHeaders();
-      const { data, error } = await supabase.functions.invoke(`scheduled-topups?id=${id}`, {
+      const res = await fetch(`${FUNCTIONS_BASE}?id=${id}`, {
         method: "DELETE",
         headers,
       });
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to cancel");
       if (!data?.success) throw new Error(data?.error || "Failed to cancel");
 
       await fetchSchedules();
@@ -122,12 +128,13 @@ export function useScheduledTopUps() {
   const updateSchedule = async (id: string, updates: Partial<CreateSchedulePayload> & { status?: string }) => {
     try {
       const headers = await getAuthHeaders();
-      const { data, error } = await supabase.functions.invoke(`scheduled-topups?id=${id}`, {
+      const res = await fetch(`${FUNCTIONS_BASE}?id=${id}`, {
         method: "PUT",
         headers,
-        body: updates,
+        body: JSON.stringify(updates),
       });
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to update");
       if (!data?.success) throw new Error(data?.error || "Failed to update");
 
       await fetchSchedules();
