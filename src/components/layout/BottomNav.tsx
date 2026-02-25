@@ -1,4 +1,4 @@
-import { Home, Wallet, Settings, BarChart3 } from "lucide-react";
+import { Home, Wallet, Settings, BarChart3, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BottomNavProps {
@@ -9,6 +9,7 @@ interface BottomNavProps {
 const navItems = [
   { id: "home", icon: Home, label: "Home" },
   { id: "wallet", icon: Wallet, label: "Wallet" },
+  { id: "schedules", icon: CalendarClock, label: "Schedules" },
   { id: "analytics", icon: BarChart3, label: "Insights" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];

@@ -166,6 +166,128 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_topup_executions: {
+        Row: {
+          amount: number
+          executed_at: string
+          failure_reason: string | null
+          id: string
+          scheduled_topup_id: string
+          status: string
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          executed_at?: string
+          failure_reason?: string | null
+          id?: string
+          scheduled_topup_id: string
+          status: string
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          executed_at?: string
+          failure_reason?: string | null
+          id?: string
+          scheduled_topup_id?: string
+          status?: string
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_topup_executions_scheduled_topup_id_fkey"
+            columns: ["scheduled_topup_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_topups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_topup_executions_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_topups: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          max_executions: number | null
+          network: string
+          next_execution_at: string | null
+          phone_number: string | null
+          phone_number_id: string | null
+          plan_id: string | null
+          recurring_day_of_month: number | null
+          recurring_day_of_week: number | null
+          recurring_time: string | null
+          schedule_type: string
+          scheduled_at: string | null
+          status: string
+          total_executions: number
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          max_executions?: number | null
+          network: string
+          next_execution_at?: string | null
+          phone_number?: string | null
+          phone_number_id?: string | null
+          plan_id?: string | null
+          recurring_day_of_month?: number | null
+          recurring_day_of_week?: number | null
+          recurring_time?: string | null
+          schedule_type: string
+          scheduled_at?: string | null
+          status?: string
+          total_executions?: number
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          max_executions?: number | null
+          network?: string
+          next_execution_at?: string | null
+          phone_number?: string | null
+          phone_number_id?: string | null
+          plan_id?: string | null
+          recurring_day_of_month?: number | null
+          recurring_day_of_week?: number | null
+          recurring_time?: string | null
+          schedule_type?: string
+          scheduled_at?: string | null
+          status?: string
+          total_executions?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_topups_phone_number_id_fkey"
+            columns: ["phone_number_id"]
+            isOneToOne: false
+            referencedRelation: "phone_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spending_events: {
         Row: {
           amount: number

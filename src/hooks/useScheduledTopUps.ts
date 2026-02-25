@@ -3,10 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
 export interface ScheduledTopUp {
   id: string;
   user_id: string;
@@ -43,31 +39,17 @@ export interface CreateSchedulePayload {
   phone_number: string;
 }
 
-// ============================================================================
-// API BASE URL
-// ============================================================================
-
-const SCHEDULED_TOPUPS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scheduled-topups`;
-const CANCEL_TOPUP_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-managed-topup`;
-
-// ============================================================================
-// HOOK IMPLEMENTATION
-// ============================================================================
+const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scheduled-topups`;
 
 export function useScheduledTopUps() {
   const [schedules, setSchedules] = useState<ScheduledTopUp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [operationInProgress, setOperationInProgress] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  /**
-   * Retrieves auth headers with current session token
-   */
   const getAuthHeaders = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("Session expired. Please log in again.");
-    
+    if (!session) throw new Error("Session expired");
     return {
       Authorization: `Bearer ${session.access_token}`,
       "Content-Type": "application/json",
@@ -75,254 +57,102 @@ export function useScheduledTopUps() {
     };
   };
 
-  /**
-   * Fetches all scheduled top-ups for the current user
-   */
   const fetchSchedules = useCallback(async () => {
     if (!user) return;
-    
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const response = await fetch(SCHEDULED_TOPUPS_BASE, {
-        method: "GET",
-        headers,
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.error || `HTTP ${response.status}: Failed to fetch schedules`);
+      const res = await fetch(FUNCTIONS_BASE, { method: "GET", headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to fetch schedules");
+      if (data?.success) {
+        setSchedules(data.schedules.map((s: ScheduledTopUp) => ({
+          ...s,
+          amount: Number(s.amount),
+        })));
       }
-
-      const data = await response.json();
-      if (data?.success && Array.isArray(data.schedules)) {
-        setSchedules(
-          data.schedules.map((s: ScheduledTopUp) => ({
-            ...s,
-            amount: Number(s.amount),
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Error fetching schedules:", error);
-      toast({
-        title: "Failed to Load Schedules",
-        description: error instanceof Error ? error.message : "Unable to fetch your scheduled top-ups",
-        variant: "destructive",
-      });
+    } catch (e) {
+      console.error("Error fetching schedules:", e);
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user]);
 
-  // Fetch schedules on mount and when user changes
   useEffect(() => {
-    if (user) {
-      fetchSchedules();
-    }
+    if (user) fetchSchedules();
   }, [user, fetchSchedules]);
 
-  /**
-   * Creates a new scheduled top-up
-   */
   const createSchedule = async (payload: CreateSchedulePayload) => {
     try {
-      setOperationInProgress(true);
       const headers = await getAuthHeaders();
-
-      const response = await fetch(SCHEDULED_TOPUPS_BASE, {
+      const res = await fetch(FUNCTIONS_BASE, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || `Failed to create schedule (${response.status})`);
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.error || "Failed to create schedule");
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to create schedule");
+      if (!data?.success) throw new Error(data?.error || "Failed to create schedule");
 
       await fetchSchedules();
-      toast({
-        title: "Schedule Created",
-        description: `Your ${payload.type} top-up has been scheduled`,
-      });
-
+      toast({ title: "Schedule Created", description: `Your ${payload.type} top-up has been scheduled.` });
       return { error: null };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create schedule";
-      console.error("Create schedule error:", message);
-      toast({
-        title: "Error Creating Schedule",
-        description: message,
-        variant: "destructive",
-      });
-      return { error: error instanceof Error ? error : new Error(message) };
-    } finally {
-      setOperationInProgress(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to create schedule";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      return { error: e instanceof Error ? e : new Error(msg) };
     }
   };
 
-  /**
-   * Cancels a scheduled top-up permanently
-   */
-  const cancelSchedule = async (scheduleId: string) => {
+  const cancelSchedule = async (id: string) => {
     try {
-      setOperationInProgress(true);
       const headers = await getAuthHeaders();
-
-      const response = await fetch(`${CANCEL_TOPUP_BASE}?id=${scheduleId}`, {
+      const res = await fetch(`${FUNCTIONS_BASE}?id=${id}`, {
         method: "DELETE",
         headers,
       });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || `Failed to cancel schedule (${response.status})`);
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.message || "Failed to cancel schedule");
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to cancel");
+      if (!data?.success) throw new Error(data?.error || "Failed to cancel");
 
       await fetchSchedules();
-      toast({
-        title: "Schedule Cancelled",
-        description: "Your scheduled top-up has been cancelled",
-      });
-
+      toast({ title: "Schedule Cancelled", description: "The scheduled top-up has been cancelled." });
       return { error: null };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to cancel schedule";
-      console.error("Cancel schedule error:", message);
-      toast({
-        title: "Error Cancelling Schedule",
-        description: message,
-        variant: "destructive",
-      });
-      return { error: error instanceof Error ? error : new Error(message) };
-    } finally {
-      setOperationInProgress(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to cancel schedule";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      return { error: e instanceof Error ? e : new Error(msg) };
     }
   };
 
-  /**
-   * Pauses a scheduled top-up
-   */
-  const pauseSchedule = async (scheduleId: string) => {
+  const updateSchedule = async (id: string, updates: Partial<CreateSchedulePayload> & { status?: string }) => {
     try {
-      setOperationInProgress(true);
       const headers = await getAuthHeaders();
-
-      const response = await fetch(`${CANCEL_TOPUP_BASE}?id=${scheduleId}&action=pause`, {
-        method: "PATCH",
+      const res = await fetch(`${FUNCTIONS_BASE}?id=${id}`, {
+        method: "PUT",
         headers,
+        body: JSON.stringify(updates),
       });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || `Failed to pause schedule (${response.status})`);
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.message || "Failed to pause schedule");
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to update");
+      if (!data?.success) throw new Error(data?.error || "Failed to update");
 
       await fetchSchedules();
-      toast({
-        title: "Schedule Paused",
-        description: "Your scheduled top-up has been paused",
-      });
-
+      toast({ title: "Schedule Updated", description: "Your schedule has been updated." });
       return { error: null };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to pause schedule";
-      console.error("Pause schedule error:", message);
-      toast({
-        title: "Error Pausing Schedule",
-        description: message,
-        variant: "destructive",
-      });
-      return { error: error instanceof Error ? error : new Error(message) };
-    } finally {
-      setOperationInProgress(false);
-    }
-  };
-
-  /**
-   * Resumes a paused scheduled top-up
-   */
-  const resumeSchedule = async (scheduleId: string) => {
-    try {
-      setOperationInProgress(true);
-      const headers = await getAuthHeaders();
-
-      const response = await fetch(`${CANCEL_TOPUP_BASE}?id=${scheduleId}&action=resume`, {
-        method: "PATCH",
-        headers,
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || `Failed to resume schedule (${response.status})`);
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.message || "Failed to resume schedule");
-      }
-
-      await fetchSchedules();
-      toast({
-        title: "Schedule Resumed",
-        description: "Your scheduled top-up has been resumed",
-      });
-
-      return { error: null };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to resume schedule";
-      console.error("Resume schedule error:", message);
-      toast({
-        title: "Error Resuming Schedule",
-        description: message,
-        variant: "destructive",
-      });
-      return { error: error instanceof Error ? error : new Error(message) };
-    } finally {
-      setOperationInProgress(false);
-    }
-  };
-
-  /**
-   * Toggles pause/resume based on current status
-   */
-  const togglePauseSchedule = async (schedule: ScheduledTopUp) => {
-    if (schedule.status === "paused") {
-      return resumeSchedule(schedule.id);
-    } else if (schedule.status === "active") {
-      return pauseSchedule(schedule.id);
-    } else {
-      return {
-        error: new Error(`Cannot pause/resume a ${schedule.status} schedule`),
-      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to update schedule";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      return { error: e instanceof Error ? e : new Error(msg) };
     }
   };
 
   return {
     schedules,
     loading,
-    operationInProgress,
     fetchSchedules,
     createSchedule,
     cancelSchedule,
-    pauseSchedule,
-    resumeSchedule,
-    togglePauseSchedule,
+    updateSchedule,
   };
 }

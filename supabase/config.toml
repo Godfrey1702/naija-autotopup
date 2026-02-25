@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.budget-management]
 verify_jwt = false
+
+[functions.scheduled-topups]
+verify_jwt = false
+
+[functions.execute-scheduled-topups]
+verify_jwt = false
