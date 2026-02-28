@@ -36,6 +36,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAllAuthData } from "@/lib/sessionOnlyStorage";
+import apiClient from "@/lib/apiClient";
 
 /**
  * User profile data structure.
@@ -191,6 +192,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // If there's a backend access token stored, try to hydrate user from backend
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = apiClient.getStoredAccessToken();
+        if (!token) return;
+
+        const userData = await apiClient.apiRequest('GET', '/users/me');
+        if (userData) {
+          setUser(userData as unknown as User);
+          // Try fetching profile from supabase profiles table if available
+          if ((userData as any).id) {
+            fetchProfile((userData as any).id).then(setProfile);
+          }
+        }
+      } catch (err) {
+        // Token invalid or failed to hydrate, clear saved token
+        apiClient.clearAccessToken();
+      }
+    })();
+  }, []);
+
   /**
    * Registers a new user account.
    * Creates the user in Supabase Auth and triggers profile creation via database trigger.
@@ -201,19 +224,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    * @returns {Promise<{ error: Error | null }>} Result object with error if failed
    */
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-    return { error };
+    try {
+      const names = fullName.trim().split(/\s+/);
+      const firstName = names.shift() || '';
+      const lastName = names.join(' ') || firstName;
+
+      const data = await apiClient.apiRequest('POST', '/auth/register', {
+        email,
+        password,
+        firstName,
+        lastName,
+      }, { includeAuth: false });
+
+      const token = (data as any).accessToken;
+      if (token) apiClient.setAccessToken(token);
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
   };
 
   /**
@@ -224,11 +252,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    * @returns {Promise<{ error: Error | null }>} Result object with error if failed
    */
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const data = await apiClient.apiRequest('POST', '/auth/login', { email, password }, { includeAuth: false });
+      const token = (data as any).accessToken || (data as any).tokens?.accessToken;
+      const userObj = (data as any).user || null;
+      if (token) {
+        apiClient.setAccessToken(token);
+        setSession({ access_token: token } as unknown as Session);
+      }
+      if (userObj) setUser(userObj as unknown as User);
+
+      // try to hydrate profile
+      if (userObj?.id) {
+        try {
+          const profileFromDb = await fetchProfile(userObj.id);
+          if (profileFromDb) setProfile(profileFromDb);
+        } catch (_) {}
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
   };
 
   /**
@@ -236,8 +281,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    * This ensures no session data persists after logout or app closure.
    */
   const signOut = async () => {
-    await supabase.auth.signOut();
-    // Clear all auth data from storage to ensure complete logout
+    try {
+      // Attempt backend logout (clears refresh cookie)
+      await apiClient.apiRequest('POST', '/auth/logout', null);
+    } catch (_) {}
+
+    // Clear stored access token and any auth artifacts
+    apiClient.clearAccessToken();
     clearAllAuthData();
     setProfile(null);
     setUser(null);

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import apiClient from '@/lib/apiClient';
 import { useAuth } from "./AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { PAYMENT_LIMITS, validateTopUp, formatCurrency } from "@/lib/constants";
@@ -76,51 +77,40 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const fetchWallet = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from("wallets")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Error fetching wallet:", error);
-      return;
-    }
-
-    if (data) {
-      setWallet({
-        ...data,
-        balance: Number(data.balance),
-      });
+    try {
+      const data = await apiClient.apiRequest('GET', '/wallets/me');
+      if (data) {
+        // API returns wallet object
+        setWallet({
+          ...(data as any),
+          balance: Number((data as any).balance),
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching wallet via backend:', err);
     }
   };
 
   const fetchTransactions = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (error) {
-      console.error("Error fetching transactions:", error);
-      return;
+    try {
+      const resp = await apiClient.apiRequest('GET', '/transactions/history?limit=50');
+      const list = (resp as any).data || (resp as any);
+      setTransactions(
+        (list || []).map((tx: any) => ({
+          ...tx,
+          amount: Number(tx.amount),
+          balance_before: Number(tx.balanceSnapshot ?? tx.balance_before ?? 0),
+          balance_after: Number(tx.balance_after ?? tx.balanceSnapshot ?? 0),
+          type: tx.type as Transaction['type'],
+          status: tx.status as Transaction['status'],
+          metadata: tx.metadata as Record<string, unknown>,
+        }))
+      );
+    } catch (err) {
+      console.error('Error fetching transactions via backend:', err);
     }
-
-    setTransactions(
-      (data || []).map((tx) => ({
-        ...tx,
-        amount: Number(tx.amount),
-        balance_before: Number(tx.balance_before),
-        balance_after: Number(tx.balance_after),
-        type: tx.type as Transaction["type"],
-        status: tx.status as Transaction["status"],
-        metadata: tx.metadata as Record<string, unknown>,
-      }))
-    );
   };
 
   const fetchAutoTopUpRules = async () => {
@@ -179,58 +169,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      // Get session for auth header
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error("Session expired. Please log in again.");
-      }
-
-      // Use secure edge function for wallet funding
-      const { data: result, error: functionError } = await supabase.functions.invoke(
-        "secure-transaction-update/fund-wallet",
-        {
-          body: { amount, reference },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (functionError) {
-        throw functionError;
-      }
-
-      if (!result?.success) {
-        throw new Error(result?.error || "Failed to fund wallet");
-      }
-
+      await apiClient.apiRequest('POST', '/transactions/deposit', { amount, description: reference });
       await refreshWallet();
-      toast({
-        title: "Wallet Funded",
-        description: `${formatCurrency(amount)} has been added to your wallet.`,
-      });
-
+      toast({ title: 'Wallet Funded', description: `${formatCurrency(amount)} has been added to your wallet.` });
       return { error: null };
-
     } catch (error) {
-      console.error("Error funding wallet:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to fund wallet";
-      
-      // Check for balance limit error
-      if (errorMessage.includes("Maximum wallet balance")) {
-        toast({
-          title: "Balance Limit Exceeded",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Funding Failed",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
-
+      console.error('Error funding wallet via backend:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fund wallet';
+      toast({ title: 'Funding Failed', description: errorMessage, variant: 'destructive' });
       return { error: error instanceof Error ? error : new Error(errorMessage) };
     }
   };
@@ -285,135 +231,31 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     const cleanedPhone = phoneValidation.cleanedNumber;
     const detectedNetwork = network || phoneValidation.detectedNetwork || "MTN";
 
-    // Create transaction with pending status first
-    const { data: txData, error: txError } = await supabase.from("transactions").insert({
-      wallet_id: wallet.id,
-      user_id: user.id,
-      type: txType,
-      amount,
-      balance_before: balanceBefore,
-      balance_after: balanceAfter,
-      status: "pending",
-      reference: txReference,
-      description: `${type === "airtime" ? "Airtime" : "Data"} purchase for ${cleanedPhone}`,
-      metadata: { 
-        phone_number: cleanedPhone, 
-        phone_number_id: phoneNumberId,
-        network: detectedNetwork,
-        plan_id: planId,
-        initiated_at: new Date().toISOString(),
-      },
-    }).select().single();
-
-    if (txError) {
-      console.error("Error creating transaction:", txError);
-      toast({
-        title: "Transaction Failed",
-        description: "Could not initiate the purchase. Please try again.",
-        variant: "destructive",
-      });
-      return { error: txError };
-    }
-
+    // Create purchase via backend
     try {
-      // Get session for auth header
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error("Session expired. Please log in again.");
-      }
+      const category = type === 'airtime' ? 'AIRTIME' : 'DATA';
+      const payload = {
+        amount,
+        category,
+        provider: (detectedNetwork || 'MTN').toUpperCase(),
+        phoneNumber: cleanedPhone,
+        description: `${type === 'airtime' ? 'Airtime' : 'Data'} purchase for ${cleanedPhone}`,
+        metadata: {
+          planId,
+          phone_number_id: phoneNumberId,
+        },
+      };
 
-      // Call the appropriate edge function
-      const functionName = type === "airtime" ? "payflex-airtime-topup" : "payflex-data-topup";
-      const { data: purchaseResult, error: functionError } = await supabase.functions.invoke(
-        functionName,
-        {
-          body: {
-            phoneNumber: cleanedPhone,
-            amount,
-            network: detectedNetwork.toLowerCase(),
-            planId,
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (functionError) {
-        throw functionError;
-      }
-
-      if (!purchaseResult?.success) {
-        throw new Error(purchaseResult?.error || "Purchase failed");
-      }
-
-      // Use secure edge function to update transaction status and wallet
-      const { data: updateResult, error: updateError } = await supabase.functions.invoke(
-        "secure-transaction-update/update-status",
-        {
-          body: {
-            transactionId: txData.id,
-            status: "completed",
-            metadata: {
-              external_reference: purchaseResult.reference,
-              external_transaction_id: purchaseResult.transactionId,
-            },
-            updateWalletBalance: true,
-            balanceAfter,
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (updateError || !updateResult?.success) {
-        console.error("Error updating transaction:", updateError || updateResult?.error);
-        // Transaction may have completed but status update failed - log for reconciliation
-      }
+      const tx = await apiClient.apiRequest('POST', '/transactions/purchase', payload);
 
       await refreshWallet();
-      toast({
-        title: "Purchase Successful! 🎉",
-        description: `${formatCurrency(amount)} ${type} sent to ${cleanedPhone}`,
-      });
+      toast({ title: 'Purchase Successful! 🎉', description: `${formatCurrency(amount)} ${type} sent to ${cleanedPhone}` });
 
-      return { error: null, transactionId: txData.id };
-
+      return { error: null, transactionId: (tx as any).id };
     } catch (error) {
-      console.error("Purchase error:", error);
-      
-      // Use secure edge function to mark transaction as failed
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await supabase.functions.invoke(
-            "secure-transaction-update/update-status",
-            {
-              body: {
-                transactionId: txData.id,
-                status: "failed",
-                metadata: {
-                  failure_reason: error instanceof Error ? error.message : "Unknown error",
-                },
-              },
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            }
-          );
-        }
-      } catch (updateErr) {
-        console.error("Failed to update transaction status:", updateErr);
-      }
-
+      console.error('Purchase error via backend:', error);
       const parsedError = parseApiError(error);
-      toast({
-        title: "Purchase Failed",
-        description: parsedError.message,
-        variant: "destructive",
-      });
-
+      toast({ title: 'Purchase Failed', description: parsedError.message, variant: 'destructive' });
       return { error: error instanceof Error ? error : new Error(parsedError.message) };
     }
   };
