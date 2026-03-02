@@ -4,6 +4,31 @@
 
 **URL**: https://lovable.dev/projects/aa2c836e-a80f-4ffd-817d-563115fa8f47
 
+## Setup after cloning the repository
+
+1. Copy the example environment file and populate it:
+   ```
+   cp .env.example .env
+   # or manually create a .env matching the example
+   ```
+2. Obtain your Supabase project URL and anon key:
+   - Open the Lovable project dashboard or log in to your own
+     [Supabase](https://app.supabase.com) account.
+   - Navigate to **Project Settings → API** (or **Integrations → Supabase** in
+     Lovable) and copy the **URL** and **anon key**.
+3. Paste the values into the `.env` file you created (replace the placeholders
+   in `.env.example`).
+4. In the Supabase dashboard, go to **Authentication → URL Configuration** and
+   add the following redirect URLs:
+   ```
+   http://localhost:5173
+   http://localhost:5173/**
+   ```
+5. Save the configuration and restart the development server:
+   ```sh
+   npm run dev
+   ```
+
 ## How can I edit this code?
 
 There are several ways of editing your application.

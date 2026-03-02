@@ -17,6 +17,22 @@ const nameSchema = z.string().trim().min(2, "Name must be at least 2 characters"
 type AuthMode = "login" | "signup" | "forgot";
 
 const Auth = () => {
+  // simple check for required Supabase env vars; display clear message if absent
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return (
+      <div className="p-6 max-w-md mx-auto mt-20 bg-red-50 border border-red-200 rounded">
+        <h2 className="text-lg font-bold text-red-800">Missing Supabase credentials</h2>
+        <p className="mt-2 text-red-700">
+          Please create a <code>.env</code> file from <code>.env.example</code> and
+          restart the development server. The application cannot perform login
+          without these keys.
+        </p>
+      </div>
+    );
+  }
+
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
