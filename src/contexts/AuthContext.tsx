@@ -200,20 +200,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    * @param {string} fullName - User's display name
    * @returns {Promise<{ error: Error | null }>} Result object with error if failed
    */
+  const normalizeAuthError = (error: unknown): Error => {
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("failed to fetch") || message.includes("networkerror") || message.includes("load failed")) {
+        return new Error("Unable to reach authentication service. Please check your connection and try again.");
+      }
+      return error;
+    }
+    return new Error("Authentication failed. Please try again.");
+  };
+
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
-    return { error };
+      });
+      return { error };
+    } catch (error) {
+      return { error: normalizeAuthError(error) };
+    }
   };
 
   /**
@@ -224,11 +239,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    * @returns {Promise<{ error: Error | null }>} Result object with error if failed
    */
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return { error };
+    } catch (error) {
+      return { error: normalizeAuthError(error) };
+    }
   };
 
   /**
