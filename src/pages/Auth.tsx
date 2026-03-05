@@ -70,7 +70,16 @@ const Auth = () => {
       if (mode === "login") {
         const { error } = await signIn(email, password);
         if (error) {
-          if (error.message.includes("Invalid login credentials")) {
+          const isNetworkError = error.message.toLowerCase().includes("failed to fetch") ||
+            error.message.toLowerCase().includes("unable to reach authentication service");
+
+          if (isNetworkError) {
+            toast({
+              title: "Connection issue",
+              description: "Unable to reach authentication service. Please check your network and try again.",
+              variant: "destructive",
+            });
+          } else if (error.message.includes("Invalid login credentials")) {
             toast({
               title: "Login failed",
               description: "Invalid email or password. Please try again.",
@@ -112,6 +121,12 @@ const Auth = () => {
           });
         }
       }
+    } catch (error) {
+      toast({
+        title: "Request failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
