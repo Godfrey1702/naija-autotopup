@@ -52,12 +52,21 @@ export async function createTransaction(transaction: {
   metadata: Record<string, unknown>;
 }) {
   // --- Current: Supabase ---
+  const insertData = {
+    wallet_id: transaction.wallet_id,
+    user_id: transaction.user_id,
+    type: transaction.type,
+    amount: transaction.amount,
+    balance_before: transaction.balance_before,
+    balance_after: transaction.balance_after,
+    reference: transaction.reference,
+    description: transaction.description,
+    metadata: transaction.metadata as import("@/integrations/supabase/types").Json,
+    status: "pending" as const,
+  };
   const { data, error } = await supabase
     .from("transactions")
-    .insert({
-      ...transaction,
-      status: "pending" as const,
-    })
+    .insert(insertData)
     .select()
     .single();
   return { data, error };
