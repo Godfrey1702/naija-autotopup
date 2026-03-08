@@ -54,7 +54,18 @@ export async function createTransaction(transaction: {
   // --- Current: Supabase ---
   const { data, error } = await supabase
     .from("transactions")
-    .insert({ ...transaction, status: "pending" })
+    .insert({
+      wallet_id: transaction.wallet_id,
+      user_id: transaction.user_id,
+      type: transaction.type as "deposit" | "withdrawal" | "airtime_purchase" | "data_purchase" | "auto_topup",
+      amount: transaction.amount,
+      balance_before: transaction.balance_before,
+      balance_after: transaction.balance_after,
+      reference: transaction.reference,
+      description: transaction.description,
+      metadata: transaction.metadata,
+      status: "pending" as const,
+    })
     .select()
     .single();
   return { data, error };
