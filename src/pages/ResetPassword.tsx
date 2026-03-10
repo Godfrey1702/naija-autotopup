@@ -57,7 +57,7 @@ const ResetPassword = () => {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await authService.updateUserPassword(password);
       
       if (error) {
         toast({
