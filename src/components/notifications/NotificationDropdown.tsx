@@ -48,7 +48,7 @@ export function NotificationDropdown() {
   useEffect(() => {
     if (!user) return;
     const cleanup = notificationService.subscribeToNotifications(user.id, (payload) => {
-      setNotifications((prev) => [payload as Notification, ...prev]);
+      setNotifications((prev) => [payload as unknown as Notification, ...prev]);
     });
     return cleanup;
   }, [user]);
