@@ -2,7 +2,6 @@
  * @fileoverview Budgets Service Layer
  * 
  * Abstracts budget and spending analytics operations.
- * Maps to future backend module: spending-analytics → budgets module
  * 
  * @module api/budgets
  */
@@ -12,16 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Fetch spending analytics.
- * 
- * Current: Supabase Edge Function (spending-analytics)
- * Future: GET /budgets/analytics
  */
-export async function getSpendingAnalytics(params?: {
-  startDate?: string;
-  endDate?: string;
-  network?: string;
-}) {
-  // --- Current: Supabase ---
+export async function getSpendingAnalytics() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("No active session");
 
@@ -32,31 +23,33 @@ export async function getSpendingAnalytics(params?: {
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
-
-  // --- Future: External Backend ---
-  // const { data } = await api.get("/budgets/analytics", { params });
-  // return data;
 }
 
 /**
- * Fetch user budget.
- * 
- * Current: Supabase Edge Function (budget-management)
- * Future: GET /budgets
+ * Fetch current month's budget.
  */
-export async function getBudget() {
-  // --- Current: Supabase ---
+export async function getCurrentBudget() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("No active session");
 
-  const { data, error } = await supabase.functions.invoke("budget-management", {
-    body: null,
-    headers: { Authorization: `Bearer ${session.access_token}` },
+  const response = await supabase.functions.invoke("budget-management/current", {
+    method: "GET",
   });
-  if (error) throw error;
-  return data;
+  if (response.error) throw new Error(response.error.message || "Failed to fetch budget");
+  return response.data;
+}
 
-  // --- Future: External Backend ---
-  // const { data } = await api.get("/budgets");
-  // return data;
+/**
+ * Set or update the monthly budget amount.
+ */
+export async function setBudget(budgetAmount: number) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("No active session");
+
+  const response = await supabase.functions.invoke("budget-management", {
+    method: "POST",
+    body: { budget_amount: budgetAmount },
+  });
+  if (response.error) throw new Error(response.error.message || "Failed to set budget");
+  return response.data;
 }

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Zap, Lock, Eye, EyeOff, Loader2, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { authService } from "@/api";
 import { z } from "zod";
 
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters").max(72);
@@ -25,7 +25,7 @@ const ResetPassword = () => {
   useEffect(() => {
     // Check if we have a valid session from the reset link
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await authService.getSession();
       if (!session) {
         toast({
           title: "Invalid or expired link",
@@ -57,7 +57,7 @@ const ResetPassword = () => {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await authService.updateUserPassword(password);
       
       if (error) {
         toast({
