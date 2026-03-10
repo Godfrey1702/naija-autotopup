@@ -95,7 +95,7 @@ export async function deleteAutoTopUpRule(id: string) {
 export async function createTransaction(transaction: {
   wallet_id: string;
   user_id: string;
-  type: string;
+  type: "deposit" | "withdrawal" | "airtime_purchase" | "data_purchase" | "auto_topup";
   amount: number;
   balance_before: number;
   balance_after: number;
@@ -106,7 +106,14 @@ export async function createTransaction(transaction: {
   const { data, error } = await supabase
     .from("transactions")
     .insert({
-      ...transaction,
+      wallet_id: transaction.wallet_id,
+      user_id: transaction.user_id,
+      type: transaction.type,
+      amount: transaction.amount,
+      balance_before: transaction.balance_before,
+      balance_after: transaction.balance_after,
+      reference: transaction.reference,
+      description: transaction.description,
       metadata: transaction.metadata as Json,
       status: "pending" as const,
     })
