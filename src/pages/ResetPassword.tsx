@@ -25,7 +25,7 @@ const ResetPassword = () => {
   useEffect(() => {
     // Check if we have a valid session from the reset link
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await authService.getSession();
       if (!session) {
         toast({
           title: "Invalid or expired link",
