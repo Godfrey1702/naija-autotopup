@@ -1,73 +1,80 @@
-# Welcome to your Lovable project
+# DataFlex — Data & Airtime Wallet Platform
 
-## Project info
+A wallet-based data and airtime purchase system with spending analytics, budget tracking, and scheduled top-ups.
 
-**URL**: https://lovable.dev/projects/aa2c836e-a80f-4ffd-817d-563115fa8f47
+## Tech Stack
 
-## How can I edit this code?
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Framer Motion
+- **Backend:** Lovable Cloud (Supabase) — Auth, PostgreSQL, Edge Functions
+- **State:** React Context (Auth, Wallet, PhoneNumber) + TanStack React Query
+- **Routing:** React Router v6
 
-There are several ways of editing your application.
+## Project Structure
 
-**Use Lovable**
+```
+src/
+├── api/                  # Service layer — ALL backend communication
+│   ├── client.ts         # Axios client (future external API)
+│   ├── auth.ts           # Authentication (signup, login, logout, password reset)
+│   ├── wallets.ts        # Wallet ops, purchases, transaction updates
+│   ├── transactions.ts   # Transaction history queries
+│   ├── budgets.ts        # Budget management & spending analytics
+│   ├── users.ts          # Profiles, KYC, phone numbers
+│   ├── notifications.ts  # Notification CRUD
+│   ├── scheduled-topups.ts # Scheduled top-up management
+│   ├── greeting.ts       # Personalised greeting
+│   └── index.ts          # Barrel export
+├── contexts/             # React Contexts (consume api/ services only)
+├── hooks/                # Custom hooks (consume api/ services only)
+├── components/
+│   ├── ui/               # shadcn/ui primitives
+│   ├── views/            # Page-level view components
+│   ├── dashboard/        # Dashboard widgets
+│   ├── analytics/        # Spending analytics components
+│   ├── scheduled/        # Scheduled top-up components
+│   ├── settings/         # Settings components
+│   ├── onboarding/       # Onboarding flow
+│   ├── kyc/              # KYC verification
+│   ├── layout/           # Navigation & layout
+│   ├── receipt/          # Transaction receipts
+│   └── notifications/    # Notification UI
+├── pages/                # Route pages (Index, Auth, ResetPassword)
+├── lib/                  # Utilities, constants, validation
+└── integrations/supabase # Auto-generated client & types (do not edit)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/aa2c836e-a80f-4ffd-817d-563115fa8f47) and start prompting.
+supabase/
+└── functions/            # Edge Functions (serverless backend logic)
+    ├── payflex-airtime-topup/
+    ├── payflex-data-topup/
+    ├── scheduled-topups/
+    ├── execute-scheduled-topups/
+    ├── cancel-managed-topup/
+    ├── secure-transaction-update/
+    ├── budget-management/
+    ├── spending-analytics/
+    ├── verify-nin/
+    └── get-greeting/
+```
 
-Changes made via Lovable will be committed automatically to this repo.
+## Architecture
 
-**Use your preferred IDE**
+All UI components communicate with the backend exclusively through the **`src/api/` service layer**. No component, context, or hook imports the Supabase client directly. This enables a future migration to an external Node.js API by updating only the service implementations.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```
+UI Components → Contexts/Hooks → src/api/* services → Supabase (current) / External API (future)
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Getting Started
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
 npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Requires Node.js ≥ 18. Environment variables are auto-managed by Lovable Cloud.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Deployment
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/aa2c836e-a80f-4ffd-817d-563115fa8f47) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Open [Lovable](https://lovable.dev/projects/aa2c836e-a80f-4ffd-817d-563115fa8f47) → Share → Publish.

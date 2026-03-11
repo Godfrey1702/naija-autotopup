@@ -1,278 +1,148 @@
 # TECHNICAL & PRODUCT DOCUMENTATION
 
-**Project:** Data & Airtime Wallet + Spending Analytics Platform
-**Current Phase:** MVP
-**Core Feature:** Manual Top-Up + Scheduled Top-Up + Spending Tracking
+**Project:** DataFlex — Data & Airtime Wallet Platform  
+**Phase:** MVP  
+**Last Updated:** 2026-03-11
 
 ---
 
 ## 1. Project Overview
 
-This platform is a wallet-based data and airtime purchase system that enables users to:
+A wallet-based data and airtime purchase system enabling users to:
 
-- Manually purchase data and airtime
-- Track spending behavior over time
-- Set monthly spending budgets
-- Receive alerts when approaching or exceeding budget limits
-- View spending analytics on a dashboard
+- Manually purchase data and airtime for any Nigerian network
+- Schedule recurring or one-time top-ups
+- Track spending with analytics dashboards
+- Set and monitor monthly spending budgets
+- Receive budget threshold alerts (50%, 75%, 90%, 100%)
 
-This product is **analytics-first**, not automation-first.
-
-- Auto-top-up is intentionally excluded
-- Manual control + visibility is the priority
+**Philosophy:** Analytics-first, manual-control product. Users stay aware of spending.
 
 ---
 
-## 2. Business Objective
+## 2. Architecture
 
-The system is designed to:
+### Frontend
 
-- Increase user awareness of data/airtime spending
-- Encourage disciplined usage through budgeting
-- Generate revenue through transaction volume, not hidden automation
-- Scale with user growth and high transaction concurrency
+- React 18 + TypeScript + Vite
+- Tailwind CSS + shadcn/ui design system
+- Framer Motion for animations
+- React Router v6 (SPA, tab-based navigation)
 
-This is a numbers business:
+### Backend (Lovable Cloud)
 
-> Users × Transactions × Retention = Sustainability
+- Authentication (email/password, email verification)
+- PostgreSQL database
+- Edge Functions (serverless business logic)
+
+### Service Layer (`src/api/`)
+
+All backend communication is routed through modular service files. No UI component imports the database client directly.
+
+| Service | Responsibilities |
+|---------|-----------------|
+| `auth` | Signup, login, logout, password reset, session management |
+| `wallets` | Wallet balance, funding, purchases, auto top-up rules |
+| `transactions` | Transaction history, filtering, receipts |
+| `budgets` | Budget CRUD, spending analytics |
+| `users` | Profiles, KYC verification, phone number management |
+| `notifications` | Fetch, mark read, mark all read |
+| `scheduled-topups` | Create, update, cancel, list scheduled top-ups |
+| `greeting` | Time-based personalised greeting |
+
+This decoupling allows swapping the backend (e.g. to a Node.js API) by editing only service implementations.
 
 ---
 
-## 3. High-Level Architecture
+## 3. Database Schema
 
-### System Components
+| Table | Purpose |
+|-------|---------|
+| `profiles` | User profile data (name, phone, KYC status) |
+| `wallets` | User wallet (balance, currency) |
+| `transactions` | All financial transactions (immutable audit trail) |
+| `phone_numbers` | Registered phone numbers per user |
+| `user_budgets` | Monthly budget settings and spend tracking |
+| `user_kyc` | KYC/NIN verification records |
+| `notifications` | In-app notifications |
+| `auto_topup_rules` | Threshold-based auto top-up configuration |
+| `scheduled_topups` | Scheduled (one-time/recurring) top-up definitions |
+| `scheduled_topup_executions` | Execution log for scheduled top-ups |
+| `spending_events` | Categorised spending events for analytics |
 
-#### Frontend
+### Key Enums
 
-- Web / Mobile Client (React-based)
-- User Dashboard
-- Budget & Settings Interface
-
-#### Backend
-
-- Authentication Service
-- Wallet Service
-- Transaction Service
-- Budget & Analytics Service
-- Notification Service
-
-#### External Services
-
-- Third-party telecom API (data/airtime provider)
-- Payment gateway (wallet funding)
-
-#### Database
-
-- Relational DB (PostgreSQL recommended)
-- Redis (caching, rate limiting, sessions)
+- `transaction_status`: pending, completed, failed, refunded
+- `transaction_type`: deposit, withdrawal, airtime_purchase, data_purchase, auto_topup
 
 ---
 
 ## 4. Authentication & Session Policy
 
-### Login Behavior (Intentional Design)
-
-- User must authenticate every time they re-enter the app
-- No silent session persistence
-- Access tokens are short-lived
-- Refresh tokens are invalidated on app exit
-
-### Reasoning
-
-- Financial safety
-- Shared device environments
-- Reduced risk of unauthorized purchases
+- Email/password authentication with email verification
+- No silent session persistence — users re-authenticate on app re-entry
+- Short-lived access tokens
+- Designed for shared-device safety
 
 ---
 
-## 5. Core Workflow: Manual Top-Up
+## 5. Core Flows
 
-### Step-by-Step Flow
+### Manual Purchase
 
-1. **User Initiates Purchase**
-   - Selects data/airtime plan
-   - Confirms purchase amount
+1. User selects plan (airtime/data), network, phone number
+2. Frontend validates via `usePurchaseValidation` hook
+3. Service layer creates pending transaction + invokes purchase Edge Function
+4. Edge Function calls third-party telecom API
+5. On success: wallet debited, transaction completed, spending event recorded
+6. On failure: transaction marked failed, wallet unchanged
 
-2. **Authentication Check**
-   - Validate access token
-   - Reject request if unauthenticated
+### Scheduled Top-Ups
 
-3. **Wallet Balance Validation**
-   - Ensure sufficient balance
-   - Lock wallet row (DB transaction)
+- **One-time:** Execute at a specific date/time
+- **Recurring:** Daily, weekly, or monthly with configurable time
+- Managed via `scheduled-topups` Edge Function
+- Execution handled by `execute-scheduled-topups` Edge Function
 
-4. **Third-Party API Call**
-   - Send purchase request
-   - Await response (success / pending / failed)
+### Budget & Analytics
 
-5. **Transaction Resolution**
-   - On success:
-     - Deduct wallet balance
-     - Create transaction record
-   - On failure:
-     - Rollback wallet lock
-     - Log error
-
-6. **Frontend Update**
-   - Display transaction status
-   - Update wallet balance
-   - Trigger analytics recalculation
+- User sets monthly budget in Settings
+- Real-time spend tracking against budget
+- Alerts at 50%, 75%, 90%, 100% thresholds
+- Analytics dashboard: pie charts, network breakdown, monthly trends
 
 ---
 
-## 6. Spending Analytics Workflow (Critical Feature)
+## 6. Edge Functions
 
-### Data Capture
-
-Every successful transaction writes:
-
-- `user_id`
-- `amount`
-- `category` (data / airtime)
-- `timestamp`
-- `network_provider`
-- `transaction_status`
-
-This data is **immutable**.
-
-### Monthly Budget Logic
-
-#### Budget Setting (Settings Page)
-
-User defines:
-
-- Monthly spending limit (e.g. ₦10,000)
-- Budget reset cycle (calendar month)
-
-Stored as:
-
-```
-monthly_budget {
-  user_id
-  amount
-  month
-  year
-}
-```
-
-#### Real-Time Tracking (Dashboard)
-
-On every transaction:
-
-- Aggregate monthly spending:
-  ```sql
-  SUM(transactions.amount)
-  WHERE user_id = X
-  AND month = current_month
-  ```
-- Compare against budget
-- Calculate percentage used
-
-### Notification Triggers
-
-| Condition      | Action              |
-| -------------- | ------------------- |
-| 70% used       | Soft warning        |
-| 90% used       | Strong warning      |
-| 100% exceeded  | Limit breach alert  |
-
-Notifications can be:
-
-- In-app alerts
-- Push notifications
-- Email (future)
+| Function | Purpose |
+|----------|---------|
+| `payflex-airtime-topup` | Process airtime purchases via provider API |
+| `payflex-data-topup` | Process data purchases via provider API |
+| `secure-transaction-update` | Wallet funding & transaction status updates |
+| `budget-management` | Get/set monthly budgets |
+| `spending-analytics` | Aggregated spending data for analytics |
+| `scheduled-topups` | CRUD for scheduled top-up definitions |
+| `execute-scheduled-topups` | Cron-triggered execution of due schedules |
+| `cancel-managed-topup` | Cancel a scheduled top-up |
+| `verify-nin` | NIN/KYC verification |
+| `get-greeting` | Personalised time-based greeting |
 
 ---
 
-## 7. Data Flow Synchronization
+## 7. Security
 
-### Frontend ↔ Backend Consistency
-
-- Backend is source of truth
-- Frontend never computes balances
-- All analytics come from API responses
-
-Pattern used:
-
-- Event-driven recalculation
-- Optimistic UI only after backend confirmation
+- All financial logic runs server-side (Edge Functions)
+- RLS policies on all tables
+- No client-side balance computation
+- KYC verification required before purchases
+- Phone verification in onboarding flow
 
 ---
 
-## 8. Scalability Strategy
+## 8. Scalability Notes
 
-### Backend Design Principles
-
-- Stateless APIs
-- Horizontal scaling
+- Stateless API design
 - Idempotent transaction endpoints
-- Queue-based third-party calls
-
-### High Traffic Handling
-
-- Rate limiting per user
-- Redis locks on wallet writes
-- Async workers for provider APIs
-
-### Transactions Per Second (TPS)
-
+- Queue-based provider calls (future)
 - MVP target: 100–300 TPS
-- Scalable to 1k+ TPS with:
-  - Read replicas
-  - Queue separation
-  - Provider load balancing
-
----
-
-## 9. Database Structure (Simplified)
-
-### Core Tables
-
-- `users`
-- `wallets`
-- `transactions`
-- `budgets`
-- `notifications`
-- `audit_logs`
-
-All financial operations are:
-
-- ACID-compliant
-- Fully auditable
-- Non-destructive
-
----
-
-## 10. Error Handling & Observability
-
-- Centralized logging
-- Transaction trace IDs
-- Provider failure retries
-- Alerting on anomaly patterns
-
----
-
-## 11. Security Considerations
-
-- No client-side balance logic
-- Encrypted tokens
-- Signed provider requests
-- Request validation at every layer
-
----
-
-## 12. What This Project Is NOT
-
-- ❌ Not an auto-top-up system
-- ❌ Not a wallet lender
-- ❌ Not a prediction engine (yet)
-
-> This discipline is important. Scope creep kills products.
-
----
-
-## 13. Roadmap (Post-MVP)
-
-- Spending insights (behavior patterns)
-- Provider optimization
-- Smart recommendations
