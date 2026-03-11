@@ -22,7 +22,7 @@ interface Transaction {
   amount: number;
   balance_before: number;
   balance_after: number;
-  status: "pending" | "completed" | "failed" | "refunded";
+  status: "pending" | "completed" | "failed" | "refunded" | "initiated" | "processing" | "pending_verification";
   reference: string | null;
   description: string | null;
   metadata: Record<string, unknown>;
@@ -159,15 +159,23 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Error funding wallet:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to fund wallet";
-      if (errorMessage.includes("Maximum wallet balance")) {
-        toast({ title: "Balance Limit Exceeded", description: errorMessage, variant: "destructive" });
-      } else {
-        toast({ title: "Funding Failed", description: errorMessage, variant: "destructive" });
-      }
+      toast({ title: "Funding Failed", description: errorMessage, variant: "destructive" });
       return { error: error instanceof Error ? error : new Error(errorMessage) };
     }
   };
 
+  /**
+   * Purchase airtime or data through the transaction-safe edge function.
+   *
+   * The edge function handles the entire lifecycle atomically:
+   * 1. Generates idempotent reference
+   * 2. Locks wallet & deducts balance (SELECT FOR UPDATE)
+   * 3. Creates transaction record (INITIATED → PROCESSING)
+   * 4. Calls Payflex API with retry (3 attempts, exponential backoff)
+   * 5. On success: marks COMPLETED, records spending & budget
+   * 6. On failure: auto-refunds wallet, marks FAILED
+   * 7. On ambiguous: marks PENDING_VERIFICATION
+   */
   const purchaseAirtimeOrData = async (
     type: "airtime" | "data",
     amount: number,
@@ -181,6 +189,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       return { error: new Error("No wallet available") };
     }
 
+    // Frontend validation (backend re-validates)
     const phoneValidation = validateNigerianPhoneNumber(phoneNumber);
     if (!phoneValidation.valid) {
       toast({ title: "Invalid Phone Number", description: phoneValidation.error, variant: "destructive" });
@@ -193,84 +202,50 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       return { error: new Error(amountValidation.error || "Invalid amount") };
     }
 
-    const balanceBefore = wallet.balance;
-    const balanceAfter = balanceBefore - amount;
-    const txReference = `${type.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const txType = type === "airtime" ? "airtime_purchase" as const : "data_purchase" as const;
     const cleanedPhone = phoneValidation.cleanedNumber;
     const detectedNetwork = network || phoneValidation.detectedNetwork || "MTN";
 
-    // Create pending transaction via service layer
-    const { data: txData, error: txError } = await walletService.createTransaction({
-      wallet_id: wallet.id,
-      user_id: user.id,
-      type: txType,
-      amount,
-      balance_before: balanceBefore,
-      balance_after: balanceAfter,
-      reference: txReference,
-      description: `${type === "airtime" ? "Airtime" : "Data"} purchase for ${cleanedPhone}`,
-      metadata: {
-        phone_number: cleanedPhone,
-        phone_number_id: phoneNumberId,
-        network: detectedNetwork,
-        plan_id: planId,
-        initiated_at: new Date().toISOString(),
-      },
-    });
-
-    if (txError) {
-      console.error("Error creating transaction:", txError);
-      toast({ title: "Transaction Failed", description: "Could not initiate the purchase. Please try again.", variant: "destructive" });
-      return { error: txError };
-    }
-
     try {
-      const functionName = type === "airtime" ? "payflex-airtime-topup" : "payflex-data-topup";
-      const purchaseResult = await walletService.invokePurchaseFunction(functionName, {
+      // Single edge function call handles everything: wallet lock, deduction,
+      // provider call with retry, refund on failure, spending tracking
+      const result = await walletService.executePurchase(type, {
         phoneNumber: cleanedPhone,
         amount,
         network: detectedNetwork.toLowerCase(),
         planId,
       });
 
-      if (!purchaseResult?.success) {
-        throw new Error(purchaseResult?.error || "Purchase failed");
-      }
-
-      // Update transaction status via service layer
-      const updateResult = await walletService.updateTransactionStatus({
-        transactionId: txData.id,
-        status: "completed",
-        metadata: {
-          external_reference: purchaseResult.reference,
-          external_transaction_id: purchaseResult.transactionId,
-        },
-        updateWalletBalance: true,
-        balanceAfter,
-      });
-
-      if (!updateResult?.success) {
-        console.error("Error updating transaction:", updateResult?.error);
-      }
-
       await refreshWallet();
-      toast({ title: "Purchase Successful! 🎉", description: `${formatCurrency(amount)} ${type} sent to ${cleanedPhone}` });
-      return { error: null, transactionId: txData.id };
+
+      if (result?.success) {
+        toast({
+          title: "Purchase Successful! 🎉",
+          description: `${formatCurrency(amount)} ${type} sent to ${cleanedPhone}`,
+        });
+        return { error: null, transactionId: result.transactionId };
+      }
+
+      // Pending verification — not a hard failure
+      if (result?.status === "pending_verification") {
+        toast({
+          title: "Purchase Processing",
+          description: "Your purchase is being verified. You'll be notified of the outcome.",
+        });
+        return { error: null, transactionId: result.transactionId };
+      }
+
+      // Provider failed but wallet was refunded
+      const errorMsg = result?.error || "Purchase failed";
+      const refundNote = result?.refunded ? " Your wallet has been refunded." : "";
+      toast({
+        title: "Purchase Failed",
+        description: `${errorMsg}${refundNote}`,
+        variant: "destructive",
+      });
+      return { error: new Error(errorMsg), transactionId: result?.transactionId };
+
     } catch (error) {
       console.error("Purchase error:", error);
-
-      // Mark transaction as failed via service layer
-      try {
-        await walletService.updateTransactionStatus({
-          transactionId: txData.id,
-          status: "failed",
-          metadata: { failure_reason: error instanceof Error ? error.message : "Unknown error" },
-        });
-      } catch (updateErr) {
-        console.error("Failed to update transaction status:", updateErr);
-      }
-
       const parsedError = parseApiError(error);
       toast({ title: "Purchase Failed", description: parsedError.message, variant: "destructive" });
       return { error: error instanceof Error ? error : new Error(parsedError.message) };
@@ -291,7 +266,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       console.error("Error creating rule:", error);
-      toast({ title: "Error", description: "Failed to create auto top-up rule. You may already have a rule for this type and phone number.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to create auto top-up rule.", variant: "destructive" });
       return { error };
     }
 

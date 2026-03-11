@@ -1,14 +1,15 @@
 /**
  * @fileoverview Wallets Service Layer
- * 
+ *
  * Abstracts wallet operations. Currently delegates to Supabase.
- * 
+ * Purchase functions now delegate entirely to edge functions which handle
+ * wallet locking, idempotency, retry, and refund atomically.
+ *
  * @module api/wallets
  */
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-// import { api } from "./client"; // Uncomment for future external backend
 
 /**
  * Fetch the user's wallet.
@@ -23,7 +24,7 @@ export async function getWallet(userId: string) {
 }
 
 /**
- * Fund wallet via secure edge function.
+ * Fund wallet via secure edge function (uses atomic fund_wallet_atomic DB function).
  */
 export async function fundWallet(amount: number, reference?: string) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -33,6 +34,62 @@ export async function fundWallet(amount: number, reference?: string) {
     "secure-transaction-update/fund-wallet",
     {
       body: { amount, reference },
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }
+  );
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Execute a complete airtime or data purchase through the transaction-safe
+ * edge function. The edge function handles the entire lifecycle:
+ * 1. Idempotency check
+ * 2. Atomic wallet lock & deduction
+ * 3. Transaction record creation
+ * 4. Provider API call with retry
+ * 5. Auto-refund on failure
+ * 6. Spending & budget tracking
+ *
+ * @param type - "airtime" or "data"
+ * @param params - Purchase parameters
+ * @returns Purchase result with transactionId and reference
+ */
+export async function executePurchase(
+  type: "airtime" | "data",
+  params: {
+    phoneNumber: string;
+    amount: number;
+    network: string;
+    planId?: string;
+    idempotencyKey?: string;
+  }
+) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Session expired. Please log in again.");
+
+  const functionName = type === "airtime" ? "payflex-airtime-topup" : "payflex-data-topup";
+
+  const { data, error } = await supabase.functions.invoke(functionName, {
+    body: params,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Verify a pending_verification transaction against the provider.
+ */
+export async function verifyTransaction(transactionId: string) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Session expired");
+
+  const { data, error } = await supabase.functions.invoke(
+    "secure-transaction-update/verify-transaction",
+    {
+      body: { transactionId },
       headers: { Authorization: `Bearer ${session.access_token}` },
     }
   );
@@ -90,7 +147,8 @@ export async function deleteAutoTopUpRule(id: string) {
 }
 
 /**
- * Create a pending transaction.
+ * @deprecated Use executePurchase instead. Kept for backward compatibility.
+ * Create a pending transaction record.
  */
 export async function createTransaction(transaction: {
   wallet_id: string;
@@ -123,7 +181,7 @@ export async function createTransaction(transaction: {
 }
 
 /**
- * Invoke a purchase edge function (airtime or data).
+ * @deprecated Use executePurchase instead. Kept for backward compatibility.
  */
 export async function invokePurchaseFunction(
   functionName: string,
@@ -141,7 +199,7 @@ export async function invokePurchaseFunction(
 }
 
 /**
- * Update transaction status via secure edge function.
+ * @deprecated Use executePurchase instead. Kept for backward compatibility.
  */
 export async function updateTransactionStatus(body: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
