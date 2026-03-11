@@ -140,7 +140,50 @@ This decoupling allows swapping the backend (e.g. to a Node.js API) by editing o
 
 ---
 
-## 8. Scalability Notes
+## 8. Transaction Safety System
+
+All purchases follow a strict transaction lifecycle with these guarantees:
+
+### State Machine
+
+```
+INITIATED → PROCESSING → COMPLETED
+                       → FAILED (auto-refund)
+                       → PENDING_VERIFICATION → COMPLETED / FAILED
+```
+
+### Safety Features
+
+| Feature | Implementation |
+|---------|---------------|
+| **Idempotency** | Unique `reference` (format: `txn_YYYYMMDD_randomstring`) with UNIQUE index |
+| **Wallet Locking** | `lock_and_deduct_wallet` DB function uses `SELECT FOR UPDATE` |
+| **Auto-Refund** | `refund_wallet` DB function on provider failure |
+| **Retry** | 3 attempts with exponential backoff (1s, 3s, 9s) |
+| **Audit Trail** | `wallet_ledger` table records every balance change |
+| **Provider Verification** | `/verify-transaction` endpoint for ambiguous outcomes |
+
+### Database Functions
+
+- `lock_and_deduct_wallet(user_id, amount, reference)` — Atomic deduction with ledger
+- `refund_wallet(user_id, amount, reference)` — Atomic credit with ledger
+- `fund_wallet_atomic(user_id, amount, reference)` — Atomic funding with max balance check
+
+### Purchase Flow (Edge Function)
+
+1. Validate JWT & inputs
+2. Check idempotency (reject duplicate references)
+3. Lock wallet row & deduct balance atomically
+4. Create transaction record (INITIATED)
+5. Update to PROCESSING
+6. Call Payflex API with retry
+7. On success: COMPLETED, record spending event, update budget
+8. On failure: FAILED, auto-refund wallet
+9. On ambiguous: PENDING_VERIFICATION (verify later)
+
+---
+
+## 9. Scalability Notes
 
 - Stateless API design
 - Idempotent transaction endpoints

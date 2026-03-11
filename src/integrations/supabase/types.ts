@@ -332,6 +332,10 @@ export type Database = {
           description: string | null
           id: string
           metadata: Json | null
+          network: string | null
+          phone_number: string | null
+          product_type: string | null
+          provider_reference: string | null
           reference: string | null
           status: Database["public"]["Enums"]["transaction_status"]
           type: Database["public"]["Enums"]["transaction_type"]
@@ -347,6 +351,10 @@ export type Database = {
           description?: string | null
           id?: string
           metadata?: Json | null
+          network?: string | null
+          phone_number?: string | null
+          product_type?: string | null
+          provider_reference?: string | null
           reference?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           type: Database["public"]["Enums"]["transaction_type"]
@@ -362,6 +370,10 @@ export type Database = {
           description?: string | null
           id?: string
           metadata?: Json | null
+          network?: string | null
+          phone_number?: string | null
+          product_type?: string | null
+          provider_reference?: string | null
           reference?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           type?: Database["public"]["Enums"]["transaction_type"]
@@ -445,6 +457,50 @@ export type Database = {
         }
         Relationships: []
       }
+      wallet_ledger: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          transaction_reference: string
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          transaction_reference: string
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          transaction_reference?: string
+          type?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_ledger_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wallets: {
         Row: {
           balance: number
@@ -477,10 +533,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      fund_wallet_atomic: {
+        Args: { p_amount: number; p_reference: string; p_user_id: string }
+        Returns: Json
+      }
+      lock_and_deduct_wallet: {
+        Args: { p_amount: number; p_reference: string; p_user_id: string }
+        Returns: Json
+      }
+      refund_wallet: {
+        Args: { p_amount: number; p_reference: string; p_user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
-      transaction_status: "pending" | "completed" | "failed" | "refunded"
+      transaction_status:
+        | "pending"
+        | "completed"
+        | "failed"
+        | "refunded"
+        | "initiated"
+        | "processing"
+        | "pending_verification"
       transaction_type:
         | "deposit"
         | "withdrawal"
@@ -614,7 +688,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      transaction_status: ["pending", "completed", "failed", "refunded"],
+      transaction_status: [
+        "pending",
+        "completed",
+        "failed",
+        "refunded",
+        "initiated",
+        "processing",
+        "pending_verification",
+      ],
       transaction_type: [
         "deposit",
         "withdrawal",

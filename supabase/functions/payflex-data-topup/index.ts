@@ -1,297 +1,148 @@
 /**
- * PAYFLEX DATA TOP-UP EDGE FUNCTION
- * ==================================
- * 
- * This edge function handles data bundle purchases through the Payflex VTU API.
- * It provides plan retrieval, purchase processing, and balance checking.
- * 
+ * PAYFLEX DATA TOP-UP EDGE FUNCTION (Transaction-Safe)
+ * =====================================================
+ *
+ * Handles data plan retrieval and secure purchase processing with full
+ * transaction safety: idempotency, wallet locking, retry, auto-refund.
+ *
  * ## Endpoints
- * 
- * ### GET /payflex-data-topup?action=plans&network=mtn
- * Retrieves available data plans with pricing (includes 5% margin).
- * Falls back to predefined plans if Payflex API is unavailable.
- * 
- * **Response:**
- * ```json
- * {
- *   "success": true,
- *   "plans": [
- *     { "id": "1gb", "name": "1GB", "costPrice": 300, "finalPrice": 315, "validity": "30 days", "dataAmount": "1GB", "network": "MTN" }
- *   ],
- *   "source": "payflex" | "fallback"
- * }
- * ```
- * 
- * ### POST /payflex-data-topup?action=purchase
- * Processes a data purchase (requires authentication).
- * 
- * **Request Body:**
- * ```json
- * {
- *   "phoneNumber": "08012345678",
- *   "planId": "1gb",
- *   "network": "mtn",
- *   "amount": 315
- * }
- * ```
- * 
- * ### GET /payflex-data-topup?action=balance
- * Checks the Payflex wallet balance (for monitoring).
- * 
- * ## Pricing
- * All prices include a 5% margin over Payflex base cost.
- * 
- * ## Security
- * - Plan retrieval and balance check are public
- * - Purchases require valid JWT authentication
- * - User ID is logged for audit trail
- * 
+ *
+ * ### GET ?action=plans&network=mtn
+ * Returns data plans from Payflex (with fallback) including 5% margin. Public.
+ *
+ * ### GET ?action=balance
+ * Returns Payflex wallet balance. Public.
+ *
+ * ### POST (body: { phoneNumber, planId, network, amount, idempotencyKey? })
+ * Processes a data purchase with full safety guarantees. Authenticated.
+ *
  * @module payflex-data-topup
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-/**
- * CORS headers for cross-origin requests.
- */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-/** Payflex API key from environment */
 const PAYFLEX_API_KEY = Deno.env.get('PAYFLEX_API_KEY');
-
-/** Payflex API base URL */
 const PAYFLEX_BASE_URL = 'https://api.payflexng.com/v1';
-
-/** Margin percentage added to Payflex base prices (5%) */
 const MARGIN_PERCENTAGE = 0.05;
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [1000, 3000, 9000];
 
-/**
- * Structure for a data plan with pricing.
- */
 interface DataPlan {
-  /** Unique plan identifier */
   id: string;
-  /** Display name (e.g., "1GB") */
   name: string;
-  /** Base cost from Payflex in NGN */
   costPrice: number;
-  /** Final price including margin */
   finalPrice: number;
-  /** Network provider in uppercase */
   network: string;
-  /** Validity period (e.g., "30 days") */
   validity: string;
-  /** Data allocation (e.g., "1GB") */
   dataAmount: string;
 }
 
-/**
- * Main request handler for the payflex-data-topup edge function.
- */
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+function generateReference(): string {
+  const now = new Date();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const rand = crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+  return `txn_${date}_${rand}`;
+}
 
+function getCurrentMonthYear(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const BUDGET_THRESHOLDS = [50, 75, 90, 100];
+
+async function createNotification(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  notification: { title: string; message: string; type: string; category: string; metadata?: Record<string, unknown> }
+) {
   try {
-    const url = new URL(req.url);
-    const action = url.searchParams.get('action');
+    await adminClient.from("notifications").insert({ user_id: userId, ...notification, metadata: notification.metadata || {} });
+  } catch (e) { console.error("[notification] Failed:", e); }
+}
 
-    // =========================================================================
-    // GET ?action=plans - Retrieve data plans (public endpoint)
-    // =========================================================================
-    if (req.method === 'GET' && action === 'plans') {
-      const network = url.searchParams.get('network') || 'mtn';
-      
-      console.log(`[payflex-data-topup] Fetching plans for network: ${network}`);
-      
-      // Attempt to fetch plans from Payflex API
-      const response = await fetch(`${PAYFLEX_BASE_URL}/data/plans?network=${network}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${PAYFLEX_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
+async function recordSpendingAndUpdateBudget(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  transactionId: string,
+  amount: number
+) {
+  const currentMonth = getCurrentMonthYear();
+  try {
+    await adminClient.from("spending_events").insert({
+      user_id: userId, transaction_id: transactionId, category: "DATA", amount,
+    });
 
-      if (!response.ok) {
-        console.error(`[payflex-data-topup] Payflex API error: ${response.status}`);
-        // Return fallback plans if Payflex API is unavailable
-        const fallbackPlans = getFallbackPlans(network);
-        return new Response(JSON.stringify({ 
-          success: true, 
-          plans: fallbackPlans,
-          source: 'fallback'
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const { data: budget } = await adminClient
+      .from("user_budgets").select("*").eq("user_id", userId).eq("month_year", currentMonth).maybeSingle();
+    if (!budget) return;
+
+    const newAmountSpent = Number(budget.amount_spent) + amount;
+    const budgetAmount = Number(budget.budget_amount);
+    await adminClient.from("user_budgets")
+      .update({ amount_spent: newAmountSpent, updated_at: new Date().toISOString() }).eq("id", budget.id);
+    if (budgetAmount <= 0) return;
+
+    const percentageUsed = Math.round((newAmountSpent / budgetAmount) * 100);
+    const lastAlertLevel = budget.last_alert_level || 0;
+
+    for (const threshold of BUDGET_THRESHOLDS) {
+      if (percentageUsed >= threshold && lastAlertLevel < threshold) {
+        const isOver = threshold >= 100;
+        const remaining = Math.max(0, budgetAmount - newAmountSpent);
+        await createNotification(adminClient, userId, {
+          title: isOver ? "Monthly Budget Exceeded" : `${threshold}% Budget Used`,
+          message: isOver
+            ? `You've exceeded your monthly budget of ₦${budgetAmount.toLocaleString()}. Spent: ₦${newAmountSpent.toLocaleString()}.`
+            : `You've used ${threshold}% of your budget. ₦${remaining.toLocaleString()} remaining.`,
+          type: isOver ? "warning" : "info", category: "budget",
+          metadata: { threshold, budgetAmount, amountSpent: newAmountSpent, percentageUsed, remaining },
         });
+        await adminClient.from("user_budgets").update({ last_alert_level: threshold }).eq("id", budget.id);
+        break;
       }
-
-      const data = await response.json();
-      
-      // Transform Payflex response and add margin to each plan
-      const plansWithMargin = data.plans?.map((plan: any) => ({
-        id: plan.id,
-        name: plan.name,
-        costPrice: plan.price,
-        finalPrice: Math.ceil(plan.price * (1 + MARGIN_PERCENTAGE)),
-        network: plan.network,
-        validity: plan.validity,
-        dataAmount: plan.data_amount,
-      })) || getFallbackPlans(network);
-
-      console.log(`[payflex-data-topup] Returning ${plansWithMargin.length} plans`);
-      
-      return new Response(JSON.stringify({ 
-        success: true, 
-        plans: plansWithMargin,
-        source: 'payflex'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
     }
+  } catch (e) { console.error("[budget] Error:", e); }
+}
 
-    // =========================================================================
-    // POST ?action=purchase - Process data purchase (authenticated)
-    // =========================================================================
-    if (req.method === 'POST' && action === 'purchase') {
-      // Validate authorization header
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Create Supabase client and verify user
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-      
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-
-      // Validate JWT by fetching user from server
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        console.error('[payflex-data-topup] Authentication failed:', userError);
-        return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const userId = user.id;
-
-      // Parse request body
-      const { phoneNumber, planId, network, amount } = await req.json();
-
-      console.log(`[payflex-data-topup] Processing purchase for user: ${userId}, phone: ${phoneNumber}, plan: ${planId}`);
-
-      // Call Payflex API to process the data purchase
-      const purchaseResponse = await fetch(`${PAYFLEX_BASE_URL}/data/purchase`, {
+async function callPayflexWithRetry(
+  url: string, body: Record<string, unknown>, retries = MAX_RETRIES
+): Promise<{ success: boolean; data?: Record<string, unknown>; error?: string; ambiguous?: boolean }> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${PAYFLEX_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone_number: phoneNumber,
-          plan_id: planId,
-          network: network,
-        }),
+        headers: { 'Authorization': `Bearer ${PAYFLEX_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), signal: controller.signal,
       });
+      clearTimeout(timeout);
 
-      if (!purchaseResponse.ok) {
-        const errorData = await purchaseResponse.json().catch(() => ({}));
-        console.error(`[payflex-data-topup] Purchase failed:`, errorData);
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: errorData.message || 'Data purchase failed' 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      if (response.ok) {
+        return { success: true, data: await response.json() };
       }
-
-      const purchaseData = await purchaseResponse.json();
-      
-      console.log(`[payflex-data-topup] Purchase successful:`, purchaseData);
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        transactionId: purchaseData.transaction_id,
-        reference: purchaseData.reference,
-        message: 'Data purchase successful'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // =========================================================================
-    // GET ?action=balance - Check Payflex wallet balance
-    // =========================================================================
-    if (req.method === 'GET' && action === 'balance') {
-      const response = await fetch(`${PAYFLEX_BASE_URL}/wallet/balance`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${PAYFLEX_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: 'Failed to fetch balance' 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        return { success: false, error: errorData.message || `Provider error: ${response.status}` };
       }
-
-      const data = await response.json();
-      
-      return new Response(JSON.stringify({ 
-        success: true,
-        balance: data.balance
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.warn(`[payflex] Attempt ${attempt + 1} failed (${response.status})`);
+    } catch (err) {
+      console.warn(`[payflex] Attempt ${attempt + 1} error:`, err);
+      if (attempt === retries - 1) {
+        return { success: false, error: err instanceof DOMException ? 'Provider timeout' : 'Network error', ambiguous: true };
+      }
     }
-
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
-  } catch (error) {
-    console.error('[payflex-data-topup] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    if (attempt < retries - 1) await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
   }
-});
+  return { success: false, error: 'All retry attempts failed', ambiguous: true };
+}
 
-/**
- * Generates fallback data plans when Payflex API is unavailable.
- * All prices include a 5% margin over base cost.
- * 
- * @param network - Network provider name
- * @returns Array of fallback data plans
- * 
- * @example
- * const plans = getFallbackPlans("mtn");
- */
 function getFallbackPlans(network: string): DataPlan[] {
   const basePlans = [
     { id: '1gb', name: '1GB', costPrice: 300, dataAmount: '1GB', validity: '30 days' },
@@ -300,10 +151,229 @@ function getFallbackPlans(network: string): DataPlan[] {
     { id: '5gb', name: '5GB', costPrice: 1500, dataAmount: '5GB', validity: '30 days' },
     { id: '10gb', name: '10GB', costPrice: 3000, dataAmount: '10GB', validity: '30 days' },
   ];
-
   return basePlans.map(plan => ({
-    ...plan,
-    finalPrice: Math.ceil(plan.costPrice * (1 + MARGIN_PERCENTAGE)),
-    network: network.toUpperCase(),
+    ...plan, finalPrice: Math.ceil(plan.costPrice * (1 + MARGIN_PERCENTAGE)), network: network.toUpperCase(),
   }));
 }
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const url = new URL(req.url);
+    const action = url.searchParams.get('action');
+
+    // ── GET ?action=plans ────────────────────────────────────────────────
+    if (req.method === 'GET' && action === 'plans') {
+      const network = url.searchParams.get('network') || 'mtn';
+      try {
+        const response = await fetch(`${PAYFLEX_BASE_URL}/data/plans?network=${network}`, {
+          headers: { 'Authorization': `Bearer ${PAYFLEX_API_KEY}`, 'Content-Type': 'application/json' },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const plans = data.plans?.map((plan: Record<string, unknown>) => ({
+            id: plan.id, name: plan.name, costPrice: plan.price,
+            finalPrice: Math.ceil(Number(plan.price) * (1 + MARGIN_PERCENTAGE)),
+            network: plan.network, validity: plan.validity, dataAmount: plan.data_amount,
+          })) || getFallbackPlans(network);
+          return new Response(JSON.stringify({ success: true, plans, source: 'payflex' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch { /* fallback */ }
+      return new Response(JSON.stringify({ success: true, plans: getFallbackPlans(network), source: 'fallback' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── GET ?action=balance ──────────────────────────────────────────────
+    if (req.method === 'GET' && action === 'balance') {
+      const response = await fetch(`${PAYFLEX_BASE_URL}/wallet/balance`, {
+        headers: { 'Authorization': `Bearer ${PAYFLEX_API_KEY}`, 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        return new Response(JSON.stringify({ success: false, error: 'Failed to fetch balance' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ success: true, balance: data.balance }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── POST — Secure data purchase ─────────────────────────────────────
+    if (req.method === 'POST') {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const userId = user.id;
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { phoneNumber, planId, network, amount, idempotencyKey } = await req.json();
+
+      if (!phoneNumber || !network || !amount) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const purchaseAmount = Number(amount);
+
+      const txReference = idempotencyKey || generateReference();
+
+      console.log(`[data] Purchase: user=${userId} phone=${cleanPhone} plan=${planId} amount=${purchaseAmount} ref=${txReference}`);
+
+      // ── Idempotency check ──────────────────────────────────────────────
+      const { data: existingTx } = await adminClient
+        .from('transactions').select('id, status').eq('reference', txReference).maybeSingle();
+
+      if (existingTx) {
+        if (existingTx.status === 'completed') {
+          return new Response(JSON.stringify({
+            success: true, transactionId: existingTx.id, reference: txReference,
+            message: 'Transaction already completed (idempotent)',
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ error: 'Transaction already exists', existingStatus: existingTx.status }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // ── Lock wallet & deduct ───────────────────────────────────────────
+      const { data: deductResult, error: deductError } = await adminClient
+        .rpc('lock_and_deduct_wallet', { p_user_id: userId, p_amount: purchaseAmount, p_reference: txReference });
+
+      if (deductError || !deductResult?.success) {
+        return new Response(JSON.stringify({ error: deductResult?.error || deductError?.message || 'Wallet deduction failed' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { wallet_id, balance_before, balance_after } = deductResult;
+
+      // ── Create transaction (INITIATED) ─────────────────────────────────
+      const { data: txData, error: txInsertError } = await adminClient
+        .from('transactions')
+        .insert({
+          wallet_id, user_id: userId, type: 'data_purchase',
+          amount: purchaseAmount, balance_before, balance_after,
+          status: 'initiated', reference: txReference,
+          phone_number: cleanPhone, network: network.toUpperCase(), product_type: 'data',
+          description: `Data purchase for ${cleanPhone}`,
+          metadata: { plan_id: planId, initiated_at: new Date().toISOString() },
+        })
+        .select().single();
+
+      if (txInsertError) {
+        await adminClient.rpc('refund_wallet', { p_user_id: userId, p_amount: purchaseAmount, p_reference: txReference });
+        return new Response(JSON.stringify({ error: 'Failed to create transaction' }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // ── Update to PROCESSING ───────────────────────────────────────────
+      await adminClient.from('transactions').update({
+        status: 'processing',
+        metadata: { ...(txData.metadata as Record<string, unknown>), processing_at: new Date().toISOString() },
+      }).eq('id', txData.id);
+
+      // ── Call Payflex with retry ────────────────────────────────────────
+      const providerResult = await callPayflexWithRetry(
+        `${PAYFLEX_BASE_URL}/data/purchase`,
+        { phone_number: cleanPhone, plan_id: planId, network: network.toLowerCase() }
+      );
+
+      // ── Handle result ──────────────────────────────────────────────────
+      if (providerResult.success && providerResult.data) {
+        const providerRef = providerResult.data.reference || providerResult.data.transaction_id || null;
+        await adminClient.from('transactions').update({
+          status: 'completed', provider_reference: providerRef as string,
+          metadata: { ...(txData.metadata as Record<string, unknown>), completed_at: new Date().toISOString(), provider_response: providerResult.data },
+        }).eq('id', txData.id);
+
+        await recordSpendingAndUpdateBudget(adminClient, userId, txData.id, purchaseAmount);
+        await createNotification(adminClient, userId, {
+          title: 'Data Purchase Successful', message: `₦${purchaseAmount.toLocaleString()} data sent to ${cleanPhone}.`,
+          type: 'success', category: 'transaction', metadata: { transactionId: txData.id, amount: purchaseAmount },
+        });
+
+        return new Response(JSON.stringify({
+          success: true, transactionId: txData.id, reference: txReference,
+          providerReference: providerRef, message: 'Data purchase successful',
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+      } else if (providerResult.ambiguous) {
+        await adminClient.from('transactions').update({
+          status: 'pending_verification',
+          metadata: { ...(txData.metadata as Record<string, unknown>), pending_verification_at: new Date().toISOString(), provider_error: providerResult.error },
+        }).eq('id', txData.id);
+
+        await createNotification(adminClient, userId, {
+          title: 'Data Processing', message: `Your ₦${purchaseAmount.toLocaleString()} data purchase is being verified.`,
+          type: 'info', category: 'transaction', metadata: { transactionId: txData.id },
+        });
+
+        return new Response(JSON.stringify({
+          success: false, transactionId: txData.id, reference: txReference,
+          status: 'pending_verification', message: 'Purchase is being verified.',
+        }), { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+      } else {
+        const { data: refundResult } = await adminClient
+          .rpc('refund_wallet', { p_user_id: userId, p_amount: purchaseAmount, p_reference: txReference });
+
+        await adminClient.from('transactions').update({
+          status: 'failed',
+          metadata: {
+            ...(txData.metadata as Record<string, unknown>), failed_at: new Date().toISOString(),
+            failure_reason: providerResult.error, refunded: refundResult?.success || false,
+          },
+        }).eq('id', txData.id);
+
+        await createNotification(adminClient, userId, {
+          title: 'Data Purchase Failed',
+          message: `Your ₦${purchaseAmount.toLocaleString()} data purchase failed. ${refundResult?.success ? 'Wallet refunded.' : 'Contact support.'}`,
+          type: 'error', category: 'transaction', metadata: { transactionId: txData.id, refunded: refundResult?.success },
+        });
+
+        return new Response(JSON.stringify({
+          success: false, transactionId: txData.id, reference: txReference,
+          error: providerResult.error, refunded: refundResult?.success || false,
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    return new Response(JSON.stringify({ error: 'Invalid request' }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    console.error('[payflex-data-topup] Unhandled error:', error);
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
