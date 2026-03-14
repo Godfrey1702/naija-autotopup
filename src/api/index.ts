@@ -16,3 +16,4 @@ export * as userService from "./users";
 export * as notificationService from "./notifications";
 export * as scheduledTopUpService from "./scheduled-topups";
 export * as greetingService from "./greeting";
+export * as adminService from "./admin";
