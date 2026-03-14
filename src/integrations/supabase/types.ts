@@ -457,6 +457,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       wallet_ledger: {
         Row: {
           amount: number
@@ -537,6 +558,13 @@ export type Database = {
         Args: { p_amount: number; p_reference: string; p_user_id: string }
         Returns: Json
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       lock_and_deduct_wallet: {
         Args: { p_amount: number; p_reference: string; p_user_id: string }
         Returns: Json
@@ -547,6 +575,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       transaction_status:
         | "pending"
         | "completed"
@@ -688,6 +717,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       transaction_status: [
         "pending",
         "completed",
