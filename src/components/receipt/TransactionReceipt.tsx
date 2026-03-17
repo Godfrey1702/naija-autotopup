@@ -42,7 +42,7 @@ export function TransactionReceipt({
   };
 
   const receiptText = `
-AutoTopUp Receipt
+Nava Receipt
 -----------------
 Type: ${type === "airtime" ? "Airtime" : "Data"} Purchase
 Amount: ₦${amount.toLocaleString()}
