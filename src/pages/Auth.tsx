@@ -117,7 +117,7 @@ const Auth = () => {
         } else {
           toast({
             title: "Account created!",
-            description: "Welcome to AutoTopUp. Let's get started!",
+            description: "Welcome to Nava. Let's get started!",
           });
         }
       }
