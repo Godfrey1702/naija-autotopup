@@ -42,7 +42,7 @@ export function TransactionReceipt({
   };
 
   const receiptText = `
-AutoTopUp Receipt
+Nava Receipt
 -----------------
 Type: ${type === "airtime" ? "Airtime" : "Data"} Purchase
 Amount: ₦${amount.toLocaleString()}
@@ -53,7 +53,7 @@ Reference: ${reference}
 Date: ${formatDate(date)}
 Status: ${status.toUpperCase()}
 -----------------
-Thank you for using AutoTopUp!
+Thank you for using Nava!
   `.trim();
 
   const handleCopyReceipt = async () => {
@@ -76,7 +76,7 @@ Thank you for using AutoTopUp!
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "AutoTopUp Receipt",
+          title: "Nava Receipt",
           text: receiptText,
         });
       } catch (err) {

@@ -276,7 +276,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         </motion.div>
 
         <p className="text-center text-xs text-muted-foreground">
-          AutoTopUp v1.0.0 • Made with love for Nigerians
+          Nava v1.0.0 • Made with love for Nigerians
         </p>
       </div>
     </div>

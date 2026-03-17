@@ -162,7 +162,7 @@ export const PhoneVerification = ({ onComplete, onSkip }: PhoneVerificationProps
                 {consentGiven && <Check className="w-4 h-4 text-primary-foreground" />}
               </button>
               <p className="text-sm text-muted-foreground">
-                I consent to AutoTopUp monitoring my data/airtime balance and automatically topping up
+                I consent to Nava monitoring my data/airtime balance and automatically topping up
                 when it falls below my set thresholds. I understand this is required for the service to
                 work.
               </p>
