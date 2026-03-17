@@ -53,7 +53,7 @@ Reference: ${reference}
 Date: ${formatDate(date)}
 Status: ${status.toUpperCase()}
 -----------------
-Thank you for using AutoTopUp!
+Thank you for using Nava!
   `.trim();
 
   const handleCopyReceipt = async () => {
