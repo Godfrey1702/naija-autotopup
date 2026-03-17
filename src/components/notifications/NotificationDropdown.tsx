@@ -121,7 +121,7 @@ export function NotificationDropdown() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-12 w-80 sm:w-96 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden">
+          <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-80 bg-card border border-border rounded-xl shadow-elevated z-50 overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h3 className="font-semibold text-foreground">Notifications</h3>
               {unreadCount > 0 && (
