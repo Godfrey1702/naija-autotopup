@@ -42,7 +42,7 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
           <Zap className="w-10 h-10 text-primary-foreground" />
         </div>
         <h1 className="text-4xl font-bold text-foreground mb-3">
-          Auto<span className="text-gradient">TopUp</span>
+          Na<span className="text-gradient">va</span>
         </h1>
         <p className="text-muted-foreground text-lg max-w-xs mx-auto">
           Smart airtime and data management for Nigerians

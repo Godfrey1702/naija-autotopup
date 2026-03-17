@@ -122,7 +122,7 @@ export function AdminLayout() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <h2 className="text-sm font-semibold text-foreground">PayFlex Admin</h2>
+          <h2 className="text-sm font-semibold text-foreground">Nava Admin</h2>
         </header>
 
         <div className="p-4 lg:p-6">
