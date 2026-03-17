@@ -76,7 +76,7 @@ Thank you for using Nava!
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "AutoTopUp Receipt",
+          title: "Nava Receipt",
           text: receiptText,
         });
       } catch (err) {

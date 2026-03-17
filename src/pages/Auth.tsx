@@ -177,7 +177,7 @@ const Auth = () => {
             <Zap className="w-8 h-8 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">AutoTopUp</h1>
+            <h1 className="text-2xl font-bold text-foreground">Nava</h1>
             <p className="text-muted-foreground text-sm">Never run out again</p>
           </div>
         </div>
