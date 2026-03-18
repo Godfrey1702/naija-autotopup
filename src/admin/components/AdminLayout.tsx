@@ -58,9 +58,7 @@ export function AdminLayout() {
       >
         {/* Logo */}
         <div className="p-6 border-b border-border flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center">
-            <Shield className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <img src={navaIcon} alt="Nava" className="w-9 h-9 rounded-lg" />
           <div>
             <h1 className="text-sm font-bold text-foreground">Admin Panel</h1>
             <p className="text-xs text-muted-foreground truncate max-w-[140px]">

@@ -175,11 +175,9 @@ const Auth = () => {
       {/* Header */}
       <div className="gradient-hero px-6 pt-12 pb-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 rounded-2xl gradient-primary shadow-glow">
-            <Zap className="w-8 h-8 text-primary-foreground" />
-          </div>
+          <img src={navaIcon} alt="Nava" className="w-14 h-14" />
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Nava</h1>
+            <img src={navaWordmark} alt="Nava" className="h-7" />
             <p className="text-muted-foreground text-sm">Never run out again</p>
           </div>
         </div>
