@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Shield, TrendingUp, Smartphone } from "lucide-react";
+import { Shield, TrendingUp, Smartphone, Repeat } from "lucide-react";
 import navaIcon from "@/assets/nava-icon.png";
 import navaWordmark from "@/assets/nava-wordmark.png";
 import { Button } from "@/components/ui/button";
