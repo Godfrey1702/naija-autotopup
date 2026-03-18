@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Lock, Eye, EyeOff, Loader2, CheckCircle } from "lucide-react";
-import navaIcon from "@/assets/nava-icon.png";
-import navaWordmark from "@/assets/nava-wordmark.png";
+import navaLogoFull from "@/assets/nava-logo-full.png";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/api";
 import { z } from "zod";
@@ -84,12 +83,8 @@ const ResetPassword = () => {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <div className="gradient-hero px-6 pt-12 pb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <img src={navaIcon} alt="Nava" className="w-14 h-14" />
-          <div>
-            <img src={navaWordmark} alt="Nava" className="h-7" />
-            <p className="text-muted-foreground text-sm">Never run out again</p>
-          </div>
+        <div className="flex items-center justify-start mb-6">
+          <img src={navaLogoFull} alt="Nava" className="h-12" />
         </div>
       </div>
 
