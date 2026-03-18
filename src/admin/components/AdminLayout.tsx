@@ -18,7 +18,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import navaIcon from "@/assets/nava-icon.png";
+import { NavaLogo } from "@/components/brand/NavaLogo";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
