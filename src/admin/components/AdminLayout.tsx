@@ -18,7 +18,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import navaIcon from "@/assets/nava-icon.png";
+import { NavaLogo } from "@/components/brand/NavaLogo";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
@@ -58,7 +58,7 @@ export function AdminLayout() {
       >
         {/* Logo */}
         <div className="p-6 border-b border-border flex items-center gap-3">
-          <img src={navaIcon} alt="Nava" className="w-9 h-9 rounded-lg" />
+          <NavaLogo variant="icon" iconSize={36} />
           <div>
             <h1 className="text-sm font-bold text-foreground">Admin Panel</h1>
             <p className="text-xs text-muted-foreground truncate max-w-[140px]">

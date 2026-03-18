@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Shield, TrendingUp, Smartphone, Repeat } from "lucide-react";
-import navaLogoFull from "@/assets/nava-logo-full.png";
+import { NavaLogo } from "@/components/brand/NavaLogo";
 import { Button } from "@/components/ui/button";
 
 interface WelcomeScreenProps {
@@ -39,7 +39,7 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
         transition={{ duration: 0.6 }}
         className="text-center mb-8"
       >
-        <img src={navaLogoFull} alt="Nava" className="h-16 mx-auto mb-4" />
+        <NavaLogo variant="full" iconSize={56} textSize={40} className="justify-center mb-4" />
         <p className="text-muted-foreground text-lg max-w-xs mx-auto">
           Smart airtime and data management for Nigerians
         </p>
