@@ -39,8 +39,7 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
         transition={{ duration: 0.6 }}
         className="text-center mb-8"
       >
-        <img src={navaIcon} alt="Nava" className="w-20 h-20 mb-6" />
-        <img src={navaWordmark} alt="Nava" className="h-10 mx-auto mb-1" />
+        <img src={navaLogoFull} alt="Nava" className="h-16 mx-auto mb-4" />
         <p className="text-muted-foreground text-lg max-w-xs mx-auto">
           Smart airtime and data management for Nigerians
         </p>
