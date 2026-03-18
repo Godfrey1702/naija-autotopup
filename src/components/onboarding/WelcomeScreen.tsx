@@ -10,7 +10,7 @@ interface WelcomeScreenProps {
 
 const features = [
   {
-    icon: Zap,
+    icon: Repeat,
     title: "Auto Top-Up",
     description: "Never run out of data or airtime again",
   },
