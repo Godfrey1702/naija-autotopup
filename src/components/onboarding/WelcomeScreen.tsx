@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
-import { Zap, Shield, TrendingUp, Smartphone } from "lucide-react";
+import { Shield, TrendingUp, Smartphone, Repeat } from "lucide-react";
+import navaIcon from "@/assets/nava-icon.png";
+import navaWordmark from "@/assets/nava-wordmark.png";
 import { Button } from "@/components/ui/button";
 
 interface WelcomeScreenProps {
@@ -8,7 +10,7 @@ interface WelcomeScreenProps {
 
 const features = [
   {
-    icon: Zap,
+    icon: Repeat,
     title: "Auto Top-Up",
     description: "Never run out of data or airtime again",
   },
@@ -38,12 +40,8 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
         transition={{ duration: 0.6 }}
         className="text-center mb-8"
       >
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl gradient-primary shadow-glow mb-6">
-          <Zap className="w-10 h-10 text-primary-foreground" />
-        </div>
-        <h1 className="text-4xl font-bold text-foreground mb-3">
-          Na<span className="text-gradient">va</span>
-        </h1>
+        <img src={navaIcon} alt="Nava" className="w-20 h-20 mb-6" />
+        <img src={navaWordmark} alt="Nava" className="h-10 mx-auto mb-1" />
         <p className="text-muted-foreground text-lg max-w-xs mx-auto">
           Smart airtime and data management for Nigerians
         </p>
