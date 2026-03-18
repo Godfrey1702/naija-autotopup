@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Lock, Eye, EyeOff, Loader2, CheckCircle } from "lucide-react";
-import navaLogoFull from "@/assets/nava-logo-full.png";
+import { NavaLogo } from "@/components/brand/NavaLogo";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/api";
 import { z } from "zod";
