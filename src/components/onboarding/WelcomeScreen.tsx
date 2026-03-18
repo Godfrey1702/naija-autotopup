@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Shield, TrendingUp, Smartphone, Repeat } from "lucide-react";
-import navaLogoFull from "@/assets/nava-logo-full.png";
+import { NavaLogo } from "@/components/brand/NavaLogo";
 import { Button } from "@/components/ui/button";
 
 interface WelcomeScreenProps {
