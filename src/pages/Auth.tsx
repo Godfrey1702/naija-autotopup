@@ -173,9 +173,7 @@ const Auth = () => {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <div className="gradient-hero px-6 pt-12 pb-8">
-        <div className="flex items-center justify-start mb-6">
-          <img src={navaLogoFull} alt="Nava" className="h-12" />
-        </div>
+        <NavaLogo variant="full" iconSize={48} textSize={32} className="mb-6" />
       </div>
 
       {/* Auth Form */}
