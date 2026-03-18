@@ -17,8 +17,8 @@ import {
   LogOut,
   Menu,
   X,
-  Shield,
 } from "lucide-react";
+import navaIcon from "@/assets/nava-icon.png";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
