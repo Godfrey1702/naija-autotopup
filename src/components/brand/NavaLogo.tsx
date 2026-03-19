@@ -57,7 +57,7 @@ export function NavaLogo({
       {iconElement}
       <svg
         height={textSize}
-        viewBox="0 0 200 60"
+        viewBox="0 0 280 60"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -81,13 +81,13 @@ export function NavaLogo({
         <text
           x="38"
           y="48"
-          fill="#E5E7EB"
+          fill="#FFFFFF"
           fontSize="56"
           fontFamily="'Plus Jakarta Sans', system-ui, sans-serif"
           fontWeight="700"
           letterSpacing="-2"
         >
-          ava
+          avapay
         </text>
       </svg>
     </div>
