@@ -15,6 +15,7 @@ import { WalletsPage } from "@/admin/pages/WalletsPage";
 import { TransactionsPage } from "@/admin/pages/TransactionsPage";
 import { ScheduledPage } from "@/admin/pages/ScheduledPage";
 import { AnalyticsPage } from "@/admin/pages/AnalyticsPage";
+import { RolesPage } from "@/admin/pages/RolesPage";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
