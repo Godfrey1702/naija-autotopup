@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   CalendarClock,
   BarChart3,
+  ShieldCheck,
   LogOut,
   Menu,
   X,
@@ -27,6 +28,7 @@ const navItems = [
   { to: "/admin/transactions", icon: ArrowLeftRight, label: "Transactions" },
   { to: "/admin/scheduled", icon: CalendarClock, label: "Scheduled Top-Ups" },
   { to: "/admin/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/admin/roles", icon: ShieldCheck, label: "Roles" },
 ];
 
 export function AdminLayout() {
