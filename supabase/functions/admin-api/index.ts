@@ -242,6 +242,91 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "list_admins": {
+        const { data: roles } = await supabaseAdmin
+          .from("user_roles")
+          .select("id, user_id, role, created_at")
+          .eq("role", "admin")
+          .order("created_at", { ascending: false });
+        const ids = (roles || []).map((r) => r.user_id);
+        const { data: profiles } = ids.length
+          ? await supabaseAdmin.from("profiles").select("user_id, full_name").in("user_id", ids)
+          : { data: [] as { user_id: string; full_name: string | null }[] };
+        const nameMap = new Map((profiles || []).map((p) => [p.user_id, p.full_name]));
+
+        const enriched = await Promise.all(
+          (roles || []).map(async (r) => {
+            const { data: u } = await supabaseAdmin.auth.admin.getUserById(r.user_id);
+            return {
+              id: r.id,
+              user_id: r.user_id,
+              created_at: r.created_at,
+              full_name: nameMap.get(r.user_id) || null,
+              email: u?.user?.email || null,
+            };
+          })
+        );
+        result = { admins: enriched };
+        break;
+      }
+
+      case "find_user_by_email": {
+        const { email } = params as { email?: string };
+        if (!email) throw new Error("Email is required");
+        let found: { id: string; email: string | null } | null = null;
+        let page = 1;
+        const perPage = 200;
+        while (page <= 25 && !found) {
+          const { data, error: lerr } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+          if (lerr) throw lerr;
+          const match = data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+          if (match) { found = { id: match.id, email: match.email ?? null }; break; }
+          if (data.users.length < perPage) break;
+          page++;
+        }
+        if (!found) { result = { user: null }; break; }
+        const { data: profile } = await supabaseAdmin
+          .from("profiles").select("full_name").eq("user_id", found.id).maybeSingle();
+        const { data: roleRow } = await supabaseAdmin
+          .from("user_roles").select("id").eq("user_id", found.id).eq("role", "admin").maybeSingle();
+        result = {
+          user: {
+            user_id: found.id,
+            email: found.email,
+            full_name: profile?.full_name || null,
+            is_admin: !!roleRow,
+          },
+        };
+        break;
+      }
+
+      case "grant_admin": {
+        const { userId: targetUserId } = params as { userId?: string };
+        if (!targetUserId) throw new Error("userId is required");
+        const { error: insErr } = await supabaseAdmin
+          .from("user_roles")
+          .insert({ user_id: targetUserId, role: "admin" });
+        if (insErr && !insErr.message.toLowerCase().includes("duplicate")) throw insErr;
+        result = { success: true };
+        break;
+      }
+
+      case "revoke_admin": {
+        const { userId: targetUserId } = params as { userId?: string };
+        if (!targetUserId) throw new Error("userId is required");
+        if (targetUserId === user.id) {
+          throw new Error("You cannot revoke your own admin access");
+        }
+        const { error: delErr } = await supabaseAdmin
+          .from("user_roles")
+          .delete()
+          .eq("user_id", targetUserId)
+          .eq("role", "admin");
+        if (delErr) throw delErr;
+        result = { success: true };
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
