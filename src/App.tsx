@@ -15,6 +15,7 @@ import { WalletsPage } from "@/admin/pages/WalletsPage";
 import { TransactionsPage } from "@/admin/pages/TransactionsPage";
 import { ScheduledPage } from "@/admin/pages/ScheduledPage";
 import { AnalyticsPage } from "@/admin/pages/AnalyticsPage";
+import { RolesPage } from "@/admin/pages/RolesPage";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -53,6 +54,7 @@ const App = () => {
                       <Route path="transactions" element={<TransactionsPage />} />
                       <Route path="scheduled" element={<ScheduledPage />} />
                       <Route path="analytics" element={<AnalyticsPage />} />
+                      <Route path="roles" element={<RolesPage />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />
