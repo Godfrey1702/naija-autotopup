@@ -107,3 +107,23 @@ export async function getAnalytics(params: { period?: string } = {}) {
 export async function adjustWallet(params: { userId: string; amount: number; type: "credit" | "debit"; reason: string }) {
   return adminFetch("adjust_wallet", params);
 }
+
+/** List all users with the admin role. */
+export async function listAdmins() {
+  return adminFetch("list_admins");
+}
+
+/** Find a user by email (returns null if not found). */
+export async function findUserByEmail(email: string) {
+  return adminFetch("find_user_by_email", { email });
+}
+
+/** Grant admin role to a user. */
+export async function grantAdmin(userId: string) {
+  return adminFetch("grant_admin", { userId });
+}
+
+/** Revoke admin role from a user. */
+export async function revokeAdmin(userId: string) {
+  return adminFetch("revoke_admin", { userId });
+}
